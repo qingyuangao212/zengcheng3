@@ -4,11 +4,11 @@ from scipy.interpolate import RegularGridInterpolator
 
 
 def interpolate_nvh_func():
-    
-    file_path = 'reev_control/envs/utils/智能增程3.0_NVH奖励、惩罚设计.xlsx'
+
+    file_path = 'reev_control/envs/utils/智能增程3.0_NVH奖励、惩罚设计_20250520.xlsx'
     sheet_names = pd.ExcelFile(file_path).sheet_names
 
-    sheets_to_read = sheet_names[:-2]
+    sheets_to_read = sheet_names[1:-2]
     dfs = pd.read_excel(file_path, sheet_name=sheets_to_read)
 
     processed_dfs = {}
@@ -29,7 +29,7 @@ def interpolate_nvh_func():
         '90-100': (90, 100),
         '100-110': (100, 110),
         '120': (110, 120),
-        '>120': (120, 200)  # 120 → 110-120
+        '>120': (120, 200)  
     }
 
     # Convert sheets into a numerical list
@@ -67,10 +67,24 @@ def interpolate_nvh_func():
 
 nvh_func = interpolate_nvh_func()
 
+
 def step_nvh_reward(tq_seq, n_seq, spd_seq):
     # Stack into shape (N, 3)
-    query_points = np.stack([np.asarray(spd_seq), np.asarray(tq_seq), np.asarray(n_seq)], axis=-1)
-    nvh_score_seq = nvh_func(query_points)/6 - 1  # scale to -1~1
+    query_points = np.stack(
+        [np.asarray(spd_seq),
+         np.asarray(tq_seq),
+         np.asarray(n_seq)], axis=-1)
+    nvh_score_seq = nvh_func(query_points) / 6 - 1  # scale to -1~1
+
+    if np.any(np.isnan(nvh_score_seq)):
+        print("Warning: NaN values in NVH score sequence. Check input data.")
+        # find out if inputs are nan
+        print("len of nvh_score_seq:", len(nvh_score_seq))
+        print("num of nans:", np.sum(np.isnan(nvh_score_seq)))
+        print("spd_seq:", spd_seq[:10])
+        print("tq_seq:", tq_seq[:10])
+        print("n_seq:", n_seq[:10])
+        print("===========")
 
     # Call interpolation function
     return nvh_score_seq.sum()
@@ -99,7 +113,7 @@ def end_soc_reward(soc, done: bool, worst_penalty=-1e4):
 def step_soc_reward(soc_seq, UPPER_BOUND=30, LOWER_BOUND=12):
     """行驶过程中12%≤SOC≤80%，无奖励，但SOC超出此区间，给超出部分二次惩罚"""
     soc_seq = np.asarray(soc_seq)
-    upper_bound_loss = -np.dot(soc_seq > UPPER_BOUND, (soc_seq - UPPER_BOUND)*0.05)  
+    upper_bound_loss = -np.dot(soc_seq > UPPER_BOUND, (soc_seq - UPPER_BOUND)*0.05)
     # upper_bound_loss = -np.dot(soc_seq > UPPER_BOUND, (soc_seq - UPPER_BOUND)**1.5*1e-2)
 
     lower_bound_loss = -np.dot(soc_seq < LOWER_BOUND, (LOWER_BOUND - soc_seq)*0.1)  # max -1.2
@@ -112,16 +126,16 @@ def step_efficiency_reward(tq_seq, rspd_seq, EmsFuCns_seq, dt_in_ms=10):
 
     if np.all(rspd_seq==0):
         return 0
-    
+
     gen_energy_in_J = np.dot(tq_seq, rspd_seq)/9550 * dt_in_ms  # 总发电量， J= kW*ms
     F = np.sum(EmsFuCns_seq)  # 总喷油量 = 每10ms喷油量之和
-    
+
     if F==0:
         return 0
     else:
-        eta = gen_energy_in_J / (F * 0.725 * 46000) * 100
+        eta = gen_energy_in_J / (F * 0.725 * 46000) * 100 / 1000  # 发电效率，单位：%
 
-    eta_rescaled = np.interp(x=eta, xp=[0, 23.8, 31.2, 38.6, 50], fp=np.array([-2, -1, 0, 1, 2])/2)
+    eta_rescaled = np.interp(x=eta, xp=[0, 23.8, 31.2, 38.6, 50], fp=np.array([-1, -0.5, 0, 0.5, 1])/2)
 
     return eta_rescaled
 
@@ -143,7 +157,5 @@ def step_reward(sim_result: dict, done: bool, weights: list[float]|None=None):
             "efficiency_reward": weights[1]*r_efficiency,
             "step_soc_reward": weights[2]*r_step_soc,
             "end_soc_reward": weights[3]*r_end_soc}
-    
+
     return total_reward, info
-
-
