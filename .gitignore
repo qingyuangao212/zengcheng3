@@ -9,3 +9,4 @@ load_cos/
 train_results/
 reev_control/envs/Copy_of_REEVSimEnv_20250401_ert_shrlib_rtw
 *__pycache__
+scripts/nohup_out.txt

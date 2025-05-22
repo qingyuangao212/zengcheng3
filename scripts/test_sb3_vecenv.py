@@ -4,7 +4,7 @@ import gymnasium as gym
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 # Your custom environment
-from reev_control.envs.SimpleVehicleEnv import SimpleVehicleEnv
+from reev_control.envs.simple_vehicle_env import SimpleVehicleEnv
 
 # Function to create environment instances for each subprocess
 def make_env():

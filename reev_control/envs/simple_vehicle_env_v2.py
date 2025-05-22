@@ -1,3 +1,6 @@
+"""2025/05/22A version with simplified action space: power request only
+Instead of searching over feasible rspd and tq for best efficiency, use a predefined function to comute rspd and tq requests
+"""
 
 import os
 import yaml
@@ -6,17 +9,12 @@ import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
 # It's important to write out the module despite the evns/__init__.py.  Avoid circular imports
-from reev_control.envs.TrajectoryLoader import TrajectoryLoader
+from reev_control.envs.trajectory_loader import TrajectoryLoader
 from reev_control.envs.BaseController import BaseControllerV2
-from reev_control.envs.Simulator import Simulator   
+from reev_control.envs.simulator import Simulator   
 from reev_control.envs.reward import step_reward
 
 from reev_control.envs.utils import compute_drive_power, initial_action_table
-"""
-需要給我的：
-1. sequential和non-sequential的state variables
-2. lowlevel控制器和simulator輸入輸出是什麽，什麽幀率，哪些是s'，哪些是reward function需要的
-"""
 
 
 class SimpleVehicleEnv2(gym.Env):
@@ -99,8 +97,10 @@ class SimpleVehicleEnv2(gym.Env):
                        + len(self.config['simulator_state_vars']), ))  
 
         # Define action space
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
-
+        self.action_space = spaces.Box(
+                low=self.config['action_space']['gen_power_low'],
+                high=self.config['action_space']['gen_power_high'],
+                shape=(1,))
     def reset(self, seed=None, options=None):
         """
         Resets the environment at the beginning of an episode.

@@ -13,7 +13,7 @@ from stable_baselines3.common.monitor import Monitor
 
 from wandb.integration.sb3 import WandbCallback
 
-from reev_control.envs.SimpleVehicleEnv import SimpleVehicleEnv
+from reev_control.envs.simple_vehicle_env import SimpleVehicleEnv
 from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper
 from reev_control.custom_ppo import CustomPPO
 from reev_control.common.lr_schedule import linear_schedule
@@ -43,12 +43,15 @@ if __name__ == "__main__":
     os.environ["WANDB_DIR"] = "train_results"
 
     env_config = {
-        "env_config_path": "data/train/REEV07RearDrive_Jan2025/config.json",
-        "obs_seq_len": 600,  # in seconds, = 10 minutes
+        "config_path": "reev_control/envs/config.yaml",
+        # "obs_seq_len": 600,  # in seconds, = 10 minutes
+        "obs_seq_len": 1800,  # in seconds, = 10 minutes
         "data_start_index": 600,  
         "data_min_length": 1800,
-        "step_size_in_seconds": 10, 
-        "reward_weight":  [1e-5, 0.5e-2, 1e-6, 1]
+        "step_size_in_seconds": 30, 
+        # "reward_weights":  [1e-5, 0.5e-2, 1e-6, 1]
+        "reward_weights":  [0.001, 20, 0.001, 0.05]
+
     }
 
     
@@ -58,15 +61,15 @@ if __name__ == "__main__":
     #         "end_soc_reward": weights[3]*r_end_soc}
 
     train_config = {
+            "n_envs": 4,  # number of parallel environments
             "policy_type": "MlpPolicy", 
-            "total_timesteps": 2000_000,
-            "n_steps": 2048,    # number of steps to run per environment per rollout
-            "batch_size": 256,
+            "total_timesteps": 5000_000,
+            "n_steps": 1024,    # number of steps to run per environment per rollout
+            "batch_size": 512,
             "n_epochs": 10,
             "gamma": 0.99,
             "learning_rate": 3e-4,
-            "ent_coef": 0.0,
-            "n_envs": 4,
+            "ent_coef": 0.01,
             "device": 'cpu'
         }
 
@@ -75,7 +78,8 @@ if __name__ == "__main__":
     # Initialize Weights & Biases
     run = wandb.init(
         project="reev_control",
-        name="PPO_REEV07_experiment_tuneReward",
+        name="PPO_REEV07_experiment_0522",
+        notes="1. retuned reward weights (debug efficiency) 2. added some ent_coef 3. increase obs len 4. step size 30s",
         config=config,
         sync_tensorboard=True,
         monitor_gym=True,
@@ -95,7 +99,7 @@ if __name__ == "__main__":
         n_epochs=wandb.config.n_epochs,
         gamma=wandb.config.gamma,
         # learning_rate=wandb.config.learning_rate,
-        learning_rate=linear_schedule(5e-4),
+        learning_rate=linear_schedule(train_config['learning_rate']),
         ent_coef=wandb.config.ent_coef,
         tensorboard_log=f"train_results/tensorboard/{run.id}",
         info_keys=logged_info_keys
@@ -130,3 +134,4 @@ if __name__ == "__main__":
 1. 加log多少个行程轨迹episode       # print(model.get_env().get_attr("trajectory_loader"))
 
 """
+

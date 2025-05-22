@@ -39,14 +39,14 @@ efficiency_by_torque_and_rspd_spline = RectBivariateSpline(efficiency_by_torque_
 可以由此表计算对于每个转速的最大功率值
 由此得出 每个功率对应的可允许最小转速，并插值为函数
 """
-rspd_grid = np.array([900, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500])
-torque_grid = np.array([110.28, 110.28, 141.89, 162.01, 183.85, 205.16, 217.18, 221.74, 219.74])
+rspd_grid = np.array([900, 900, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500])
+torque_grid = np.array([31.831, 110.28, 110.28, 141.89, 162.01, 183.85, 205.16, 217.18, 220, 220])
 gen_power_grid = (torque_grid * rspd_grid * 2 * np.pi) / (60 * 1000)
-min_rspd_by_power_spline = UnivariateSpline(gen_power_grid, rspd_grid, k=3, s=0)
+min_rspd_by_power_spline = UnivariateSpline(gen_power_grid, rspd_grid, k=1, s=0)
 
 
-# naive initial action 
-initial_action_table = [
+# naive initial action
+initial_action_table = np.array([
     [3.5, 10, 11.5, 12.5, 12.5, 13, 15, 20, 25, 28],
     [3.5, 10, 11.5, 13, 15, 17, 19, 24, 29, 32],
     [3.5, 11, 12, 15, 18, 20, 22, 27, 30, 33],
@@ -65,9 +65,6 @@ initial_action_table = [
     [3.5, 12, 14.5, 18, 21, 23, 25, 30, 33, 36],
     [3.5, 12, 14.5, 18, 21, 23, 25, 30, 33, 36],
     [3.5, 12, 14.5, 18, 21, 23, 25, 30, 33, 36],
-]
+])
 
 initial_nvh = 0
-
-
-    

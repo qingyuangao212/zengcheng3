@@ -5,7 +5,7 @@ from gymnasium.spaces import flatten, unflatten, flatten_space
 class ActionFlatteningWrapper(gym.ActionWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.original_action_space = env.action_space
+        self.original_action_space = env.unwrapped.action_space
         self.action_space = flatten_space(self.original_action_space)
 
     def action(self, action):

@@ -48,6 +48,7 @@ class TrajectoryLoader:
             self.file_idx += 1
 
             data = self.read_and_process(file_path)
+
             if len(data) >= self.min_length:
                 assert pd.isna(data).sum().sum() == 0, f"NaN values found in {file_path}"
                 self.trajectory_counter += 1
@@ -68,6 +69,7 @@ class TrajectoryLoader:
         data = data.ffill()
         data = data.bfill()
         data.fillna(0, inplace=True)
+
         return data
     
     def get_iterations(self):
@@ -118,4 +120,8 @@ def add_fake_navigation(data: pd.DataFrame, n_quantiles=10) -> pd.DataFrame:
         data[col] = [q[i] for q in quantiles_list]
 
     return data
+
+@property
+def file_name(self):
+    return self.file_list[self.file_index]
 

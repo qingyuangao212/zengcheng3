@@ -6,7 +6,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.envs import DummyVecEnv
 from gymnasium import spaces
 from CustomFeatureExtractor import CustomFeatureExtractor  # Import your extractor
-from reev_control.envs.VehicleEnv import VehicleTrajectoryEnv  # Import your environment
+from reev_control.envs.vehicle_env import VehicleTrajectoryEnv  # Import your environment
 
 # Create vectorized environment
 env = DummyVecEnv([lambda: VehicleTrajectoryEnv()])
