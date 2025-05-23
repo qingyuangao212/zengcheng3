@@ -1,14 +1,15 @@
+__all__ = ["compute_drive_power", "efficiency_by_torque_and_rspd_spline", "min_rspd_by_power_spline", "initial_action_table", "spd_power_to_tq_spd"]
+
 import numpy as np
 import pandas as pd
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 
-
-
-# 车辆动力学方程：
-# F（行驶阻力）=a+b*v+c*v^2(a=  158.9649   b=0.6238   c= 0.0455)
-# F（加速阻力）=ma(a为两个周期车速V的变化，m=2390)
-# 驱动功率 P=FV=(F(行驶阻力)+F（加速阻力）)*V
-
+"""
+车辆动力学方程：
+F（行驶阻力）=a+b*v+c*v^2(a=  158.9649   b=0.6238   c= 0.0455)
+F（加速阻力）=ma(a为两个周期车速V的变化，m=2390)
+驱动功率 P=FV=(F(行驶阻力)+F（加速阻力）)*V
+"""
 def compute_drive_power(speed, accel):
     a, b, c = 158.9649, 0.6238, 0.0455
     m = 2390  # kg
@@ -30,7 +31,7 @@ def compute_drive_power(speed, accel):
 
 efficiency_by_torque_and_rspd_table = pd.read_excel('reev_control/envs/utils/车端增程器特性.xlsx', index_col=0)
 
-efficiency_by_torque_and_rspd_spline = RectBivariateSpline(efficiency_by_torque_and_rspd_table.index, 
+efficiency_by_torque_and_rspd_spline = RectBivariateSpline(efficiency_by_torque_and_rspd_table.index,
                                                            efficiency_by_torque_and_rspd_table.columns,
                                                            efficiency_by_torque_and_rspd_table.values)
 
@@ -42,6 +43,7 @@ efficiency_by_torque_and_rspd_spline = RectBivariateSpline(efficiency_by_torque_
 rspd_grid = np.array([900, 900, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500])
 torque_grid = np.array([31.831, 110.28, 110.28, 141.89, 162.01, 183.85, 205.16, 217.18, 220, 220])
 gen_power_grid = (torque_grid * rspd_grid * 2 * np.pi) / (60 * 1000)
+
 min_rspd_by_power_spline = UnivariateSpline(gen_power_grid, rspd_grid, k=1, s=0)
 
 
@@ -67,4 +69,24 @@ initial_action_table = np.array([
     [3.5, 12, 14.5, 18, 21, 23, 25, 30, 33, 36],
 ])
 
-initial_nvh = 0
+"""
+用于简化动作空间求解rspd,tq rquests的函数
+"""
+from scipy.interpolate import RegularGridInterpolator
+data = pd.read_excel('reev_control/envs/utils/发电功率-转速表.xlsx', index_col=0)
+data.columns = data.columns.astype(float)
+spd_power_to_rspd_interp = RegularGridInterpolator(
+    points=(data.index.values, data.columns.values), 
+    values=data.values
+    )
+
+def spd_power_to_tq_spd(spd, power):
+    """
+    计算给定车速和功率下的转速和扭矩
+    :param spd: 车速
+    :param power: 功率
+    :return: 转速和扭矩
+    """
+    rspd = spd_power_to_rspd_interp((spd, power))
+    tq = 60000/(2*np.pi) * power / rspd
+    return tq, rspd

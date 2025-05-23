@@ -6,32 +6,49 @@ import numpy as np
 from gymnasium.wrappers import TimeLimit
 
 # from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
-from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.vec_env import SubprocVecEnv
+# from stable_baselines3.common.utils import set_random_seed
+# from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
 
 from wandb.integration.sb3 import WandbCallback
 
-from reev_control.envs.simple_vehicle_env import SimpleVehicleEnv
+from reev_control.envs import SimpleVehicleEnv, SimpleVehicleEnv2
 from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper
 from reev_control.custom_ppo import CustomPPO
 from reev_control.common.lr_schedule import linear_schedule
-    
+
 
 
 
 sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action_norm"]   # throw these into InfoSumWrapper
 logged_info_keys = [key + '_sum' for key in sum_info_keys] + [key + '_avg' for key in sum_info_keys] + ["end_soc_reward"] # end_soc_reward is not summed, but logged at the end of episode
 
-def make_env(seed: int = 0, **kwargs):
+CLASS_TO_ENV = {
+    "SimpleVehicleEnv": SimpleVehicleEnv,
+    "SimpleVehicleEnv2": SimpleVehicleEnv2
+}
+
+def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
+
     def _init():
-        env = SimpleVehicleEnv(data_folder='data/train/REEV07RearDrive_Jan2025', seed=seed, **kwargs)
-        env = ActionFlatteningWrapper(env)
-        env = InfoSumWrapper(env, info_keys=sum_info_keys)     # sum all step info values to episode end info
-        env = Monitor(env, info_keywords=logged_info_keys)    # update info['episode'] with info_keys, when gets sent to ep_info_buffer
-        env.reset()     # not sure if vec env will still call reset again (can add print under env.reset to check)
+
+        env = CLASS_TO_ENV[env_class](data_folder='data/train/REEV07RearDrive_Jan2025',
+                              seed=seed,
+                              **kwargs)
+
+        if env_class == "SimpleVehicleEnv":
+            env = ActionFlatteningWrapper(env)
+
+        env = InfoSumWrapper(env, info_keys=sum_info_keys
+                             )  # sum all step info values to episode end info
+        env = Monitor(
+            env, info_keywords=logged_info_keys
+        )  # update info['episode'] with info_keys, when gets sent to ep_info_buffer
+        env.reset(
+        )  # not sure if vec env will still call reset again (can add print under env.reset to check)
         return env
+
     return _init
 
 
@@ -43,27 +60,27 @@ if __name__ == "__main__":
     os.environ["WANDB_DIR"] = "train_results"
 
     env_config = {
+        "env_class": "SimpleVehicleEnv2",
         "config_path": "reev_control/envs/config.yaml",
         # "obs_seq_len": 600,  # in seconds, = 10 minutes
         "obs_seq_len": 1800,  # in seconds, = 10 minutes
-        "data_start_index": 600,  
+        "data_start_index": 600,
         "data_min_length": 1800,
-        "step_size_in_seconds": 30, 
+        "step_size_in_seconds": 30,
         # "reward_weights":  [1e-5, 0.5e-2, 1e-6, 1]
         "reward_weights":  [0.001, 20, 0.001, 0.05]
-
     }
 
-    
+
     # info = {"nvh_reward": weights[0]*r_nvh,
     #         "efficiency_reward": weights[1]*r_efficiency,
     #         "step_soc_reward": weights[2]*r_step_soc,
     #         "end_soc_reward": weights[3]*r_end_soc}
 
     train_config = {
-            "n_envs": 4,  # number of parallel environments
-            "policy_type": "MlpPolicy", 
-            "total_timesteps": 5000_000,
+            "n_envs": 16,  # number of parallel environments
+            "policy_type": "MlpPolicy",
+            "total_timesteps": 10000_000,
             "n_steps": 1024,    # number of steps to run per environment per rollout
             "batch_size": 512,
             "n_epochs": 10,
@@ -74,12 +91,12 @@ if __name__ == "__main__":
         }
 
     config = {**env_config, **train_config}
-    
+
     # Initialize Weights & Biases
     run = wandb.init(
         project="reev_control",
-        name="PPO_REEV07_experiment_0522",
-        notes="1. retuned reward weights (debug efficiency) 2. added some ent_coef 3. increase obs len 4. step size 30s",
+        name="PPO_REEV07_experiment_0523_v2",
+        notes="SimpleVehicleEnv2 with simple action",
         config=config,
         sync_tensorboard=True,
         monitor_gym=True,
@@ -88,7 +105,7 @@ if __name__ == "__main__":
 
     seed = 100
     vec_env = SubprocVecEnv([make_env(seed=seed+i, **env_config) for i in range(train_config["n_envs"])])
-    
+
     model = CustomPPO(
         policy="MlpPolicy",
         env=vec_env,
@@ -127,11 +144,3 @@ if __name__ == "__main__":
 
 
 # TBD
-
-"""Notes on the train code: (orderless)
-- when passing a single env (without wrapping with vectorized env), PPO still wraps it in a DummyVecEnv
-
-1. 加log多少个行程轨迹episode       # print(model.get_env().get_attr("trajectory_loader"))
-
-"""
-

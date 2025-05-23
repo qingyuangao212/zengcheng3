@@ -5,3 +5,4 @@ from .reward import step_reward
 from .simulator import Simulator
 from .utils import utils
 from .simple_vehicle_env import SimpleVehicleEnv
+from .simple_vehicle_env2 import SimpleVehicleEnv2
