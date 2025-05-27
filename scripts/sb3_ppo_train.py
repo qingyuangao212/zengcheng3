@@ -6,7 +6,7 @@ import numpy as np
 from gymnasium.wrappers import TimeLimit
 
 # from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 # from stable_baselines3.common.utils import set_random_seed
 # from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
@@ -33,7 +33,7 @@ def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
 
     def _init():
 
-        env = CLASS_TO_ENV[env_class](data_folder='data/train/REEV07RearDrive_Jan2025',
+        env = CLASS_TO_ENV[env_class](data_folder='data/train/REEV07RearDrive_Mar2025',
                               seed=seed,
                               **kwargs)
 
@@ -42,9 +42,11 @@ def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
 
         env = InfoSumWrapper(env, info_keys=sum_info_keys
                              )  # sum all step info values to episode end info
+        
         env = Monitor(
             env, info_keywords=logged_info_keys
         )  # update info['episode'] with info_keys, when gets sent to ep_info_buffer
+
         env.reset(
         )  # not sure if vec env will still call reset again (can add print under env.reset to check)
         return env
@@ -60,7 +62,7 @@ if __name__ == "__main__":
     os.environ["WANDB_DIR"] = "train_results"
 
     env_config = {
-        "env_class": "SimpleVehicleEnv2",
+        "env_class": "SimpleVehicleEnv2",   # simplified action space
         "config_path": "reev_control/envs/config.yaml",
         # "obs_seq_len": 600,  # in seconds, = 10 minutes
         "obs_seq_len": 1800,  # in seconds, = 10 minutes
@@ -96,7 +98,7 @@ if __name__ == "__main__":
     run = wandb.init(
         project="reev_control",
         name="PPO_REEV07_experiment_0523_v2",
-        notes="SimpleVehicleEnv2 with simple action",
+        notes="SimpleVehicleEnv2/March data/vec normalize: verify if this affects reward logging (note this effectively wipes out the large end_soc condition, for future consider smoothing it out to previous steps)",
         config=config,
         sync_tensorboard=True,
         monitor_gym=True,
@@ -106,6 +108,16 @@ if __name__ == "__main__":
     seed = 100
     vec_env = SubprocVecEnv([make_env(seed=seed+i, **env_config) for i in range(train_config["n_envs"])])
 
+    vec_env = VecNormalize(vec_env, 
+                           training=True, 
+                           norm_obs=True, 
+                           norm_reward=True, 
+                           clip_obs=10.0, 
+                           clip_reward=10.0, 
+                           gamma=0.99, 
+                           epsilon=1e-08, 
+                           norm_obs_keys=None)
+        
     model = CustomPPO(
         policy="MlpPolicy",
         env=vec_env,

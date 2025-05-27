@@ -58,7 +58,7 @@ class InfoSumWrapper(gym.Wrapper):
         if terminated or truncated:
             for key in self.info_keys:
                 info[key+"_sum"] = self.info_sums.get(key, 0.0)
-                info[key+"_avg"] = info[key+"_sum"] / self.steps # Avoid division by zero
+                info[key+"_avg"] = info[key+"_sum"] / self.steps 
 
         return obs, reward, terminated, truncated, info
 
