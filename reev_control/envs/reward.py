@@ -111,7 +111,7 @@ def end_soc_reward(soc, done: bool, worst_penalty=-1e4):
     return 0
 
 def step_soc_reward(soc_seq, UPPER_BOUND=30, LOWER_BOUND=12):
-    """行驶过程中12%≤SOC≤80%，无奖励，但SOC超出此区间，给超出部分二次惩罚"""
+    """行驶过程中12%≤SOC≤30%，无奖励，但SOC超出此区间，给超出部分二次惩罚"""
     soc_seq = np.asarray(soc_seq)
     upper_bound_loss = -np.dot(soc_seq > UPPER_BOUND, (soc_seq - UPPER_BOUND)*0.05)
     # upper_bound_loss = -np.dot(soc_seq > UPPER_BOUND, (soc_seq - UPPER_BOUND)**1.5*1e-2)
@@ -119,7 +119,6 @@ def step_soc_reward(soc_seq, UPPER_BOUND=30, LOWER_BOUND=12):
     lower_bound_loss = -np.dot(soc_seq < LOWER_BOUND, (LOWER_BOUND - soc_seq)*0.1)  # max -1.2
 
     return upper_bound_loss + lower_bound_loss
-
 
 
 def step_efficiency_reward(tq_seq, rspd_seq, EmsFuCns_seq, dt_in_ms=10):
@@ -135,7 +134,7 @@ def step_efficiency_reward(tq_seq, rspd_seq, EmsFuCns_seq, dt_in_ms=10):
     else:
         eta = gen_energy_in_J / (F * 0.725 * 46000) * 100 / 1000  # 发电效率，单位：%
 
-    eta_rescaled = np.interp(x=eta, xp=[0, 23.8, 31.2, 38.6, 50], fp=np.array([-1, -0.5, 0, 0.5, 1])/2)
+    eta_rescaled = np.interp(x=eta, xp=[0, 23.8, 31.2, 38.6, 50], fp=np.array([-1, -0.5, 0, 0.5, 1]))
 
     return eta_rescaled
 

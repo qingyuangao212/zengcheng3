@@ -1,22 +1,18 @@
-from typing import Optional
-import gymnasium as gym
-import wandb
-import numpy as np
+import os
 
-from gymnasium.wrappers import TimeLimit
-
-# from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
-# from stable_baselines3.common.utils import set_random_seed
-# from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.monitor import Monitor
 
+import wandb
 from wandb.integration.sb3 import WandbCallback
 
 from reev_control.envs import SimpleVehicleEnv, SimpleVehicleEnv2
 from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper
 from reev_control.custom_ppo import CustomPPO
 from reev_control.common.lr_schedule import linear_schedule
+from reev_control.callbacks import WandbCallbackWithVecNorm
+
 
 
 
@@ -56,8 +52,6 @@ def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
 
 if __name__ == "__main__":
 
-    import os
-    from stable_baselines3.common.callbacks import CallbackList
 
     os.environ["WANDB_DIR"] = "train_results"
 
@@ -105,8 +99,9 @@ if __name__ == "__main__":
         save_code=True,
     )
 
-    seed = 100
-    vec_env = SubprocVecEnv([make_env(seed=seed+i, **env_config) for i in range(train_config["n_envs"])])
+    train_config['run_id'] = run.id 
+
+    vec_env = SubprocVecEnv([make_env(seed=100+i, **env_config) for i in range(train_config["n_envs"])])
 
     vec_env = VecNormalize(vec_env, 
                            training=True, 
@@ -137,7 +132,7 @@ if __name__ == "__main__":
     model.learn(
         total_timesteps=wandb.config.total_timesteps,
         callback=CallbackList([
-            WandbCallback(gradient_save_freq=100,
+            WandbCallbackWithVecNorm(gradient_save_freq=100,
                           model_save_path=f"train_results/models/{run.id}",
                           model_save_freq=10*train_config['n_steps'], # this is freq for rollout steps: on_step. set it equal to n_steps to save model every rollout call
                           verbose=2),
