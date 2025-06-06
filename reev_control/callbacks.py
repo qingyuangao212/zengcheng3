@@ -3,6 +3,7 @@ import os
 from collections import defaultdict
 from wandb.integration.sb3 import WandbCallback
 import logging
+import json
 
 class InfoLogCallback(WandbCallback):
     """
@@ -51,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 class WandbCallbackWithVecNorm(WandbCallback):
     """Add saving and logging vecnorm env"""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.vecnormalize_path = os.path.join(self.model_save_path,
@@ -61,6 +63,21 @@ class WandbCallbackWithVecNorm(WandbCallback):
         wandb.save(self.path, base_path=self.model_save_path)
 
         self.model.env.save(self.vecnormalize_path)  # vec_env
+        wandb.save(self.vecnormalize_path,
+                   base_path=self.model_save_path)  # sync to wandb folder?
+
+        # save the obs_rms stats
+        obs_rms_dict = {
+            "mean": self.model.env.obs_rms.mean.tolist(),
+            "var": self.model.env.obs_rms.var.tolist()
+        }
+        with open(os.path.join(self.model_save_path, "vecnorm_params.json"), "w") as f:
+            json.dump(obs_rms_dict, f, indent=4)
+        wandb.save(os.path.join(self.model_save_path, "vecnorm_params.json"),
+                   base_path=self.model_save_path)
+
         if self.verbose > 1:
             logger.info(f"Saving model checkpoint to {self.path}")
-            logger.info(f"Saving vecnormalize env checkpoint to {self.vecnormalize_path}")
+            logger.info(
+                f"Saving vecnormalize env checkpoint to {self.vecnormalize_path}"
+            )

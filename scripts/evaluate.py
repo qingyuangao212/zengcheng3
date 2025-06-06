@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
@@ -7,42 +6,67 @@ from stable_baselines3.common.monitor import Monitor
 from reev_control.envs import SimpleVehicleEnv2
 from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper
 from reev_control.custom_ppo import CustomPPO  # your CustomPPO
+from reev_control.envs.utils import CLASS_TO_ENV  
 import torch
+import yaml
 
 # --- Settings ---
-model_path = "train_results/wandb/run-20250523_173837-czln0k89/files/model.zip"
-vecnorm_path = "train_results/models/<run_id>/vecnormalize.pkl"  # adjust path
-obs_keys_to_log = ["some_obs_name1", "some_obs_name2"]  # update based on your actual obs
-info_keys_to_log = ["nvh_reward_sum", "efficiency_reward_sum", "step_soc_reward_sum", "end_soc_reward"]  # update accordingly
+folder = "train_results/wandb/offline-run-20250603_171003-2v1jr8zy/files"
+model_path = f"{folder}/model.zip"
+vecnorm_path = f"{folder}/vec_env.pkl"  # adjust path
+
+# load wandb config from train folder
+with open(f'{folder}/config.yaml', 'r') as file:
+    train_config = yaml.safe_load(file)
+
+train_config = {
+    k: v["value"]
+    for k, v in train_config.items()
+    if (isinstance(v, dict) and "value" in v and k!='_wandb')
+}
+
+
+# obs_keys_to_log = ["some_obs_name1", "some_obs_name2"]  # update based on your actual obs
+# info_keys_to_log = ["nvh_reward_sum", "efficiency_reward_sum", "step_soc_reward_sum", "end_soc_reward"]  # update accordingly
+
+
+
 
 # --- Create single environment for inference ---
-def make_single_env():
-    env = SimpleVehicleEnv2(
-        data_folder='data/train/REEV07RearDrive_Mar2025',
-        config_path="reev_control/envs/config.yaml",
-        obs_seq_len=1800,
-        data_start_index=600,
-        data_min_length=1800,
-        step_size_in_seconds=30,
-        reward_weights=[0.001, 20, 0.001, 0.05],
-        seed=42,
-    )
-    env = ActionFlatteningWrapper(env)
-    env = InfoSumWrapper(env, info_keys=["nvh_reward", "efficiency_reward", "step_soc_reward", "action_norm"])
-    env = Monitor(env, info_keywords=info_keys_to_log)
-    return env
+def make_eval_env(seed: int = 0, env_class: str = "SimpleVehicleEnv2", **kwargs):
 
-env = DummyVecEnv([make_single_env])
+    def _init():
+
+        env = CLASS_TO_ENV[env_class](
+            data_folder='data/train/REEV07RearDrive_Mar2025',
+            seed=seed,
+            **kwargs)
+        # env.reset()
+        return env
+
+    return _init
+
+env = DummyVecEnv([make_eval_env(**train_config)])
+
+
+
 
 # --- Load VecNormalize ---
 env = VecNormalize.load(vecnorm_path, env)
 env.training = False
-env.norm_reward = False
+env.norm_reward = False     # want original reward in eval
+obs_names = ["obs." + name for name in env.unwrapped[0]._get_obs_names]
 
 # --- Load model ---
-model = CustomPPO.load(model_path, env=env, device='cpu')
+model = CustomPPO.load(model_path, 
+                       env=env,     # not sure if need to pass in env here
+                       device='cpu'
+                       )
+
+model.policy.eval()
 
 # --- Inference Loop ---
+
 obs = env.reset()
 done = False
 log = []
@@ -52,17 +76,18 @@ while not done:
     action, _ = model.predict(obs, deterministic=True)
     next_obs, reward, done, info = env.step(action)
 
-    obs_array = obs[0]
-    obs_data = {}
-    for i, key in enumerate(obs_keys_to_log):
-        obs_data[f"observation.{key}"] = obs_array[i] if i < len(obs_array) else None
+    original_obs = env.get_original_obs()
+    original_reward = env.get_original_reward()
+    obs_array = original_obs[0]  # use unnormalized obs
 
-    info_data = {f"info.{k}": info[0].get(k, None) for k in info_keys_to_log}
+    obs_data = dict(zip(obs_names, obs_array))
+
+    info_data = {f"info.{k}": info[0].get(k, None) for k in info[0].keys()}
 
     log.append({
         "step": step,
         "action": action[0],
-        "reward": reward[0],
+        "reward": original_reward[0],
         "done": done[0],
         **obs_data,
         **info_data

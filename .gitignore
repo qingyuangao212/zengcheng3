@@ -4,6 +4,8 @@ wandb
 *.pyc
 *.XLS
 *.xlsx
+*.out
+*.csv
 data/
 load_cos/
 train_results/
