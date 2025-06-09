@@ -1,5 +1,7 @@
 """2025/05/22A version with simplified action space: power request only
 Instead of searching over feasible rspd and tq for best efficiency, use a predefined function to comute rspd and tq requests
+
+2025/06/09 add start/stop action 
 """
 
 import os
@@ -17,7 +19,7 @@ from reev_control.envs.reward import step_reward
 from reev_control.envs.utils import compute_drive_power, spd_power_to_tq_spd
 
 
-class SimpleVehicleEnv2(gym.Env):
+class SimpleVehicleEnv3(gym.Env):
     """
     Custom Gymnasium environment for REEV engine control.
     
@@ -73,6 +75,7 @@ class SimpleVehicleEnv2(gym.Env):
             data_folder=data_folder,
             step_size=self.step_size_in_seconds,
             min_length=self.config.get('data_min_length', 1800),
+            file_list_file=self.config.get('file_list_file', None),  # optional file list
             seed=self.config.get('seed')  # manages shuffling of data files; if not passed just random shuffle
         )
 
@@ -95,16 +98,10 @@ class SimpleVehicleEnv2(gym.Env):
 
         # Define action space
         self.action_space = spaces.Box(
-            low=self.config['action_space']['gen_power_low'],
-            high=self.config['action_space']['gen_power_high'],
-            shape=(1, )
-        )
-        
-        # self.action_space = spaces.Box(
-        #     low=np.array([0.0, 3.0]),      # First: for bool (0.0 or 1.0), Second: scalar
-        #     high=np.array([1.0, 100.0]),
-        #     dtype=np.float32
-        # )
+            low=np.array([self.config['action_space']['gen_power_low'], 0]),    
+            high=np.array([self.config['action_space']['gen_power_high'], 1]),  
+            dtype=np.float32
+        )   # action[0] power, action[1] start/stop (0 or 1)
 
     def reset(self, seed=None, options=None):
         """
@@ -161,8 +158,14 @@ class SimpleVehicleEnv2(gym.Env):
         # 1.a compute speed every 10ms within the step: use the next step speed and assume constant acceleration
         speed_seq, drive_power_seq = self._compute_speed_and_power_seq()
 
-        power_request_seq = np.tile(action, len(speed_seq))  # constant
-        torque_request_seq, rspd_request_seq = spd_power_to_tq_spd(speed_seq, power_request_seq)
+        if action[1] == 0:
+            # action[1] == 0 means stop, set speed to 0
+            power_request_seq = np.zeros_like(speed_seq)
+            torque_request_seq, rspd_request_seq = np.zeros_like(speed_seq), np.zeros_like(speed_seq)
+
+        elif action[1] == 1:
+            power_request_seq = np.tile(action[0], len(speed_seq))  # constant
+            torque_request_seq, rspd_request_seq = spd_power_to_tq_spd(speed_seq, power_request_seq)
 
         info.update({
             "drive_power": drive_power_seq[-1],

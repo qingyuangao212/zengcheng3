@@ -6,3 +6,4 @@ from .simulator import Simulator
 from .utils import utils
 from .simple_vehicle_env import SimpleVehicleEnv
 from .simple_vehicle_env2 import SimpleVehicleEnv2
+from .simple_vehicle_env3 import SimpleVehicleEnv3
