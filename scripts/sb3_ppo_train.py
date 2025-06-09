@@ -27,8 +27,8 @@ def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
     def _init():
 
         env = CLASS_TO_ENV[env_class](data_folder='data/train/REEV07RearDrive_Mar2025',
-                              seed=seed,
-                              **kwargs)
+                                      seed=seed,
+                                      **kwargs)
 
         if env_class == "SimpleVehicleEnv":
             env = ActionFlatteningWrapper(env)
@@ -62,7 +62,8 @@ if __name__ == "__main__":
         "data_min_length": 3600,
         "step_size_in_seconds": 30,
         # "reward_weights":  [0.001, 200, 0.001, 0.05]
-        "reward_weights": [0.001, 3.3, 0.0005, 0.05]
+        "reward_weights": [0.001, 3.3, 0.0005, 0.05], 
+        "file_list_file": "data/train/REEV07RearDrive_Mar2025"# pickle file with list of files to load, if None, will load all files in data_folder
     }
 
     # info = {"nvh_reward": weights[0]*r_nvh,

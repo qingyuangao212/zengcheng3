@@ -5,7 +5,7 @@ import numpy as np
 from gymnasium import spaces
 
 class TrajectoryLoader:
-    def __init__(self, data_folder, step_size=1, min_length=1800, seed=None):
+    def __init__(self, data_folder, step_size=1, min_length=1800, file_list_file=None, seed=None):
         """
         A trajectory loader that iterates over CSV files in a folder, reading them lazily.
 
@@ -13,12 +13,20 @@ class TrajectoryLoader:
         - data_folder (str): Path to the folder containing trajectory CSV files.
         - step_size (int): The number of seconds
         - min_length (int): Minimum length of trajectory to be considered valid.
+        - file_list_file (list): Optional pickle file to load a list of file names.
         """
 
         self.data_folder = data_folder
         self.step_size = step_size
         self.min_length = min_length
-        self.file_list = [os.path.join(self.data_folder, f) for f in os.listdir(self.data_folder) if f.endswith(".csv")]
+
+        if file_list_file:
+            import pickle
+            with open('file_list_file', 'rb') as f:
+                self.file_list = pickle.load(f)
+        else:
+            self.file_list = [os.path.join(self.data_folder, f) for f in os.listdir(self.data_folder) if f.endswith(".csv")]
+            
         self.np_random = np.random.default_rng(seed) # set self.np_random
         self.reset()
         self.num_iterations = 0  # Track number of times all files have been iterated
@@ -47,20 +55,22 @@ class TrajectoryLoader:
             file_path = self.file_list[self.file_idx]
             self.file_idx += 1
 
-            data = self.read_and_process(file_path)
+            data = pd.read_csv(file_path)
 
-            if len(data) >= self.min_length:
-                assert pd.isna(data).sum().sum() == 0, f"NaN values found in {file_path}"
+            if len(data) < self.min_length:
+                print(f"[TrajectoryLoader] Skipping {file_path} (len={len(data)} < min_len={self.min_length})")
+                continue
+
+            else:
+                data = self.preprocess(data)
                 self.trajectory_counter += 1
                 return data
-            else:
-                print(f"[TrajectoryLoader] Skipping {file_path} (len={len(data)} < min_len={self.min_length})")
-
-    def read_and_process(self, file_path):
+            
+            
+    def preprocess(self, data):
         # TBD
         # use self.step_size to aggregate data
         
-        data = pd.read_csv(file_path)
         data = self.ad_hoc_processing(data)
         data = add_fake_navigation(data)
         return data

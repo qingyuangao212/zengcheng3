@@ -6,6 +6,7 @@ wandb
 *.xlsx
 *.out
 *.csv
+*.pkl
 data/
 load_cos/
 train_results/
