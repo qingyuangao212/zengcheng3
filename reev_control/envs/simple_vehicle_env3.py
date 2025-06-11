@@ -1,7 +1,7 @@
 """2025/05/22A version with simplified action space: power request only
 Instead of searching over feasible rspd and tq for best efficiency, use a predefined function to comute rspd and tq requests
 
-2025/06/09 add start/stop action 
+2025/06/09 add start/stop action, add file_list_file integration
 """
 
 import os
@@ -47,7 +47,7 @@ class SimpleVehicleEnv3(gym.Env):
     """
 
     def __init__(self,
-                 data_folder='data/train/REEV07RearDrive_Jan2025',
+                 data_folder='data/train/REEV07RearDrive_Mar2025',
                  config_path="reev_control/envs/config.yaml",
                  **kwargs):
         """
@@ -158,22 +158,28 @@ class SimpleVehicleEnv3(gym.Env):
         # 1.a compute speed every 10ms within the step: use the next step speed and assume constant acceleration
         speed_seq, drive_power_seq = self._compute_speed_and_power_seq()
 
-        if action[1] == 0:
+        # parse action
+        engine_stop = action[1] >= 0.5 
+        constant_power_request = action[0]
+
+        if engine_stop:
             # action[1] == 0 means stop, set speed to 0
             power_request_seq = np.zeros_like(speed_seq)
             torque_request_seq, rspd_request_seq = np.zeros_like(speed_seq), np.zeros_like(speed_seq)
 
-        elif action[1] == 1:
-            power_request_seq = np.tile(action[0], len(speed_seq))  # constant
+        else:   # action[1] >= 0.5
+            power_request_seq = np.tile(constant_power_request, len(speed_seq))  # constant
             torque_request_seq, rspd_request_seq = spd_power_to_tq_spd(speed_seq, power_request_seq)
 
         info.update({
+            "start_speed": speed_seq[0],
+            "end_speed": speed_seq[-1],
             "drive_power": drive_power_seq[-1],
+            "engine_stop": engine_stop,
+            "power_request": np.nan if engine_stop else power_request_seq[-1],
             "torque_request": torque_request_seq[-1],
             "rspd_request": rspd_request_seq[-1]
         })
-
-        info['action_norm'] = 0
 
         assert (len(speed_seq) == len(drive_power_seq) ==
                 len(torque_request_seq) == len(rspd_request_seq) ==

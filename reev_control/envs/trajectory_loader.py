@@ -4,8 +4,17 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+
 class TrajectoryLoader:
-    def __init__(self, data_folder, step_size=1, min_length=1800, file_list_file=None, seed=None):
+
+    def __init__(self,
+                 data_folder,
+                 step_size=1,
+                 min_length=1800,
+                 file_list_file=None,
+                 seed=None,
+                 *args,
+                 **kwargs):
         """
         A trajectory loader that iterates over CSV files in a folder, reading them lazily.
 
@@ -22,72 +31,83 @@ class TrajectoryLoader:
 
         if file_list_file:
             import pickle
-            with open('file_list_file', 'rb') as f:
-                self.file_list = pickle.load(f)
+            with open(file_list_file, 'rb') as f:
+                self.file_list = [
+                    os.path.join(self.data_folder, f) for f in pickle.load(f)
+                    if f.endswith(".csv")
+                ]
         else:
-            self.file_list = [os.path.join(self.data_folder, f) for f in os.listdir(self.data_folder) if f.endswith(".csv")]
-            
-        self.np_random = np.random.default_rng(seed) # set self.np_random
+            self.file_list = [
+                os.path.join(self.data_folder, f)
+                for f in os.listdir(self.data_folder) if f.endswith(".csv")
+            ]
+
+        self.np_random = np.random.default_rng(seed)  # set self.np_random
         self.reset()
         self.num_iterations = 0  # Track number of times all files have been iterated
 
-        self.trajectory_counter  = 0    # num of trajectories loaded so far
-        
-        
+        self.trajectory_counter = 0  # num of trajectories loaded so far
+
     def reset(self):
 
         self.file_idx = 0
         self.np_random.shuffle(self.file_list)
-
 
     def load_trajectory(self):
         """Load the next CSV file and track iterations over the dataset.
            TBD: aggregate features by step_size, mostly by just taking last value
         """
         if not self.file_list:
-            raise FileNotFoundError(f"No CSV files found in {self.data_folder}")
-        
+            raise FileNotFoundError(
+                f"No CSV files found in {self.data_folder}")
+
         while True:
+
+            self.file_idx += 1
             if self.file_idx >= len(self.file_list):
                 self.num_iterations += 1
                 self.reset()
-                
-            file_path = self.file_list[self.file_idx]
-            self.file_idx += 1
 
-            data = pd.read_csv(file_path)
+            data = pd.read_csv(self.file_name)
 
             if len(data) < self.min_length:
-                print(f"[TrajectoryLoader] Skipping {file_path} (len={len(data)} < min_len={self.min_length})")
+                print(
+                    f"[TrajectoryLoader] Skipping {self.file_name} (len={len(data)} < min_len={self.min_length})"
+                )
                 continue
 
             else:
                 data = self.preprocess(data)
                 self.trajectory_counter += 1
                 return data
-            
-            
+
     def preprocess(self, data):
         # TBD
         # use self.step_size to aggregate data
-        
-        data = self.ad_hoc_processing(data)
+
+        data = ad_hoc_processing(data)
         data = add_fake_navigation(data)
         return data
 
-    def ad_hoc_processing(self, data):
-        data = data.ffill()
-        data = data.bfill()
-        data.fillna(0, inplace=True)
-
-        return data
-    
     def get_iterations(self):
         """Return the number of full iterations over the dataset."""
         return self.num_iterations
 
     def set_np_random(self, np_random: np.random._generator.Generator):
         self.np_random = np_random  # numpy.random._generator.Generator
+
+    @property
+    def file_name(self):
+        return self.file_list[self.file_idx]
+
+
+def ad_hoc_processing(data):
+    data = data.ffill()
+    data = data.bfill()
+    data.fillna(0, inplace=True)
+
+    return data
+
 
 def add_fake_navigation(data: pd.DataFrame, n_quantiles=10) -> pd.DataFrame:
     """
@@ -111,11 +131,11 @@ def add_fake_navigation(data: pd.DataFrame, n_quantiles=10) -> pd.DataFrame:
     data['time_from_start'] = np.arange(len(data))
     data['nav_mileage_togo'] = data['CdcTotMilg'].iloc[-1] - data['CdcTotMilg']
     data['nav_time_togo'] = len(data) - data['time_from_start'] # in seconds
-    
+
     # Define quantile fractions (0.0 to 1.0)
     quantile_fractions = [i / n_quantiles for i in range(n_quantiles + 1)]
     nav_speed_quantiles = [f"nav_speed_q{int(q * 100)}" for q in quantile_fractions]
-    
+
     # Initialize list to store quantile values
     quantiles_list = []
 
@@ -130,8 +150,3 @@ def add_fake_navigation(data: pd.DataFrame, n_quantiles=10) -> pd.DataFrame:
         data[col] = [q[i] for q in quantiles_list]
 
     return data
-
-@property
-def file_name(self):
-    return self.file_list[self.file_index]
-

@@ -7,19 +7,21 @@ from stable_baselines3.common.monitor import Monitor
 import wandb
 from wandb.integration.sb3 import WandbCallback
 
-from reev_control.envs import SimpleVehicleEnv, SimpleVehicleEnv2
-from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper
+from reev_control.envs import SimpleVehicleEnv, SimpleVehicleEnv2, SimpleVehicleEnv3
+from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper, InfoHistoryWrapper
 from reev_control.custom_ppo import CustomPPO
 from reev_control.common.lr_schedule import linear_schedule
 from reev_control.callbacks import WandbCallbackWithVecNorm
 
 
-sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action_norm"]   # throw these into InfoSumWrapper
+sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "engine_stop", ]  
+# sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action_norm" ]   # for env1
 logged_info_keys = [key + '_sum' for key in sum_info_keys] + [key + '_avg' for key in sum_info_keys] + ["end_soc_reward"] # end_soc_reward is not summed, but logged at the end of episode
 
 CLASS_TO_ENV = {
     "SimpleVehicleEnv": SimpleVehicleEnv,
-    "SimpleVehicleEnv2": SimpleVehicleEnv2
+    "SimpleVehicleEnv2": SimpleVehicleEnv2,
+    "SimpleVehicleEnv3": SimpleVehicleEnv3
 }
 
 def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
@@ -33,7 +35,7 @@ def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
         if env_class == "SimpleVehicleEnv":
             env = ActionFlatteningWrapper(env)
 
-        env = InfoSumWrapper(env, info_keys=sum_info_keys
+        env = InfoHistoryWrapper(env, info_keys=sum_info_keys
                              )  # sum all step info values to episode end info
 
         env = Monitor(
@@ -54,7 +56,7 @@ if __name__ == "__main__":
 
 
     env_config = {
-        "env_class": "SimpleVehicleEnv2",  # simplified action space
+        "env_class": "SimpleVehicleEnv3",  # simplified action space
         "config_path": "reev_control/envs/config.yaml",
         # "obs_seq_len": 600,  # in seconds, = 10 minutes
         "obs_seq_len": 1800,  # in seconds, = 30 minutes
@@ -63,7 +65,7 @@ if __name__ == "__main__":
         "step_size_in_seconds": 30,
         # "reward_weights":  [0.001, 200, 0.001, 0.05]
         "reward_weights": [0.001, 3.3, 0.0005, 0.05], 
-        "file_list_file": "data/train/REEV07RearDrive_Mar2025"# pickle file with list of files to load, if None, will load all files in data_folder
+        "file_list_file": "data/train/Mar2025_filtered_files.pkl" # pickle file with list of files to load, if None, will load all files in data_folder
     }
 
     # info = {"nvh_reward": weights[0]*r_nvh,

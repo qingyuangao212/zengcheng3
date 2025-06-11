@@ -73,8 +73,8 @@ class SimpleVehicleEnv2(gym.Env):
             data_folder=data_folder,
             step_size=self.step_size_in_seconds,
             min_length=self.config.get('data_min_length', 1800),
-            seed=self.config.get('seed')  # manages shuffling of data files; if not passed just random shuffle
-        )
+            **self.config
+            )
 
         self.base_controller = None
 

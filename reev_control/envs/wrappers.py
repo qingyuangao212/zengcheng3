@@ -1,6 +1,7 @@
 import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import flatten, unflatten, flatten_space
+from collections import defaultdict
 
 class ActionFlatteningWrapper(gym.ActionWrapper):
     def __init__(self, env):
@@ -62,3 +63,32 @@ class InfoSumWrapper(gym.Wrapper):
 
         return obs, reward, terminated, truncated, info
 
+class InfoHistoryWrapper(gym.Wrapper):
+    """
+    Tracks full history of specified info keys per episode.
+    Computes sum and mean at episode end (handles NaNs).
+    """
+
+    def __init__(self, env, info_keys):
+        super().__init__(env)
+        self.info_keys = info_keys
+        self.info_history = None
+
+    def reset(self, **kwargs):
+        self.info_history = defaultdict(list)
+        return self.env.reset(**kwargs)
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+
+        for key in self.info_keys:
+            val = info.get(key, np.nan)
+            self.info_history[key].append(val)
+
+        if terminated or truncated:
+            for key in self.info_keys:
+                values = np.array(self.info_history[key], dtype=np.float32)
+                info[f"{key}_sum"] = np.nansum(values)
+                info[f"{key}_avg"] = np.nanmean(values) if values.size > 0 else np.nan
+
+        return obs, reward, terminated, truncated, info
