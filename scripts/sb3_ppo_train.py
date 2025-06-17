@@ -14,7 +14,7 @@ from reev_control.common.lr_schedule import linear_schedule
 from reev_control.callbacks import WandbCallbackWithVecNorm
 
 
-sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "engine_stop", ]  
+sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "engine_stop", "power_request"]  
 # sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action_norm" ]   # for env1
 logged_info_keys = [key + '_sum' for key in sum_info_keys] + [key + '_avg' for key in sum_info_keys] + ["end_soc_reward"] # end_soc_reward is not summed, but logged at the end of episode
 
