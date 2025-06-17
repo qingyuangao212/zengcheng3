@@ -14,7 +14,7 @@ from reev_control.common.lr_schedule import linear_schedule
 from reev_control.callbacks import WandbCallbackWithVecNorm
 
 
-sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "engine_stop", "power_request"]  
+sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action.engine_stop", "action.power_request"]  
 # sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action_norm" ]   # for env1
 logged_info_keys = [key + '_sum' for key in sum_info_keys] + [key + '_avg' for key in sum_info_keys] + ["end_soc_reward"] # end_soc_reward is not summed, but logged at the end of episode
 
@@ -63,8 +63,8 @@ if __name__ == "__main__":
         "data_start_index": 600,
         "data_min_length": 3600,
         "step_size_in_seconds": 30,
-        # "reward_weights":  [0.001, 200, 0.001, 0.05]
-        "reward_weights": [0.001, 3.3, 0.0005, 0.05], 
+        # "reward_weights": [0.001, 3.3, 0.0005, 0.05], 
+        "reward_weights": [0.001, 3.3, 0.05, 0.05], 
         "file_list_file": "data/train/Mar2025_filtered_files.pkl" # pickle file with list of files to load, if None, will load all files in data_folder
     }
 
@@ -80,9 +80,9 @@ if __name__ == "__main__":
         "n_steps": 1024,  # number of steps to run per environment per rollout
         "batch_size": 512, 
         "n_epochs": 10,
-        "gamma": 0.99,   
+        "gamma": 0.95,   
         "learning_rate": 3e-4,
-        "ent_coef": 0.01,
+        "ent_coef": 0.05,
         "vf_coef": 0.5,
         "device": 'cpu',
         # "model_load_path": "train_results/wandb/run-20250523_173837-czln0k89/files/model.zip"     # uaw this together with vecnorm_load_path
@@ -94,12 +94,15 @@ if __name__ == "__main__":
     # init wandb
     run = wandb.init(
         project="reev_control",
-        name="PPO_REEV07_experiment_0528_v2",
+        name="PPO_0611_env3_largeStepSocReward",
         config=config,
         sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
     )
+
+    run.notes = "previous run action converges to power 3kw or 99% stop engine, and in evaluation SOC goes<0; add stronger step_soc reward, tune params (lower gamma, increase entropy bonus)"
+
     train_config['run_id'] = run.id
 
     # ==============Environment Setup================= 
@@ -119,8 +122,8 @@ if __name__ == "__main__":
                             norm_obs=True,
                             norm_reward=True,
                             clip_obs=10.0,
-                            clip_reward=10.0,
-                            gamma=0.99,
+                            clip_reward=15.0,
+                            gamma=wandb.config.gamma,
                             epsilon=1e-08)
 
     # ==============Model Setup=================

@@ -130,7 +130,7 @@ def step_efficiency_reward(tq_seq, rspd_seq, EmsFuCns_seq, dt_in_ms=10):
     F = np.sum(EmsFuCns_seq)  # 总喷油量 = 每10ms喷油量之和
 
     if F==0:
-        return 0
+        return 0    # this is redundant, but just to be safe
     else:
         eta = gen_energy_in_J / (F * 0.725 * 46000) * 100 / 1000  # 发电效率，单位：%
 
