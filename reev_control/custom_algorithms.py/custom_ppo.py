@@ -4,7 +4,7 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.utils import safe_mean
 
-class CustomAlgos:
+class CustomPPO(PPO):
     def __init__(self, *args, info_keys=None, **kwargs):
         """
         Modified from stable_baselines3 OnPolicyAlgorithm.dump_logs.
@@ -12,7 +12,7 @@ class CustomAlgos:
 
         :param info_keys: List of custom episode-level keys to record (e.g. ['energy', 'distance']).
         """
-
+        super().__init__(*args, **kwargs)
         
         self.info_keys = info_keys or ["nvh_reward", "efficiency_reward", "step_soc_reward", "end_soc_reward"]   # use env info_keys (which are logged to ep_info_buffer) if not provided
 

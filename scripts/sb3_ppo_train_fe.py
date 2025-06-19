@@ -7,43 +7,28 @@ from stable_baselines3.common.monitor import Monitor
 import wandb
 from wandb.integration.sb3 import WandbCallback
 
-from reev_control.envs import SimpleVehicleEnv, SimpleVehicleEnv2, SimpleVehicleEnv3
+from reev_control.envs import SimpleVehicleEnv3FE
 from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper, InfoHistoryWrapper
 from reev_control.custom_ppo import CustomPPO
 from reev_control.common.lr_schedule import linear_schedule
 from reev_control.common.callbacks import WandbCallbackWithVecNorm
+from reev_control.common.feature_extractor import LSTMFeatureExtractor
 
 
 sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action.engine_stop", "action.power_request"]  
 # sum_info_keys = ["nvh_reward", "efficiency_reward", "step_soc_reward", "action_norm" ]   # for env1
 logged_info_keys = [key + '_sum' for key in sum_info_keys] + [key + '_avg' for key in sum_info_keys] + ["end_soc_reward"] # end_soc_reward is not summed, but logged at the end of episode
 
-CLASS_TO_ENV = {
-    "SimpleVehicleEnv": SimpleVehicleEnv,
-    "SimpleVehicleEnv2": SimpleVehicleEnv2,
-    "SimpleVehicleEnv3": SimpleVehicleEnv3
-}
 
-def make_env(seed: int = 0, env_class: str = "SimpleVehicleEnv", **kwargs):
+def make_env(seed: int = 0, **kwargs):
 
     def _init():
 
-        env = CLASS_TO_ENV[env_class](data_folder='data/train/REEV07RearDrive_Mar2025',
-                                      seed=seed,
-                                      **kwargs)
-
-        if env_class == "SimpleVehicleEnv":
-            env = ActionFlatteningWrapper(env)
-
-        env = InfoHistoryWrapper(env, info_keys=sum_info_keys
-                             )  # sum all step info values to episode end info
-
-        env = Monitor(
-            env, info_keywords=logged_info_keys
-        )  # update info['episode'] with info_keys, when gets sent to ep_info_buffer
-
-        env.reset(
-        )  # not sure if vec env will still call reset again (can add print under env.reset to check)
+        env = SimpleVehicleEnv3FE(data_folder='data/train/REEV07RearDrive_Mar2025',
+                            seed=seed, **kwargs)
+        env = InfoHistoryWrapper(env, info_keys=sum_info_keys)  # sum all step info values to episode end info
+        env = Monitor(env, info_keywords=logged_info_keys)  # update info['episode'] with info_keys, when gets sent to ep_info_buffer
+        env.reset()  # not sure if vec env will still call reset again (can add print under env.reset to check)
         return env
 
     return _init
@@ -56,7 +41,7 @@ if __name__ == "__main__":
 
 
     env_config = {
-        "env_class": "SimpleVehicleEnv3",  # simplified action space
+        "env_class": "SimpleVehicleEnv3FE",  # simplified action space
         "config_path": "reev_control/envs/config.yaml",
         # "obs_seq_len": 600,  # in seconds, = 10 minutes
         "obs_seq_len": 1800,  # in seconds, = 30 minutes
@@ -94,7 +79,7 @@ if __name__ == "__main__":
     # init wandb
     run = wandb.init(
         project="reev_control",
-        name="PPO_0611_env3_largeStepSocReward",
+        name="PPO_0618_env3FE",
         config=config,
         sync_tensorboard=True,
         monitor_gym=True,
@@ -111,19 +96,6 @@ if __name__ == "__main__":
         make_env(seed=100 + i, **env_config) for i in range(train_config["n_envs"])
     ])
 
-    # load VecNormalize if configured, otherwise create new VecNormalize
-    if 'vecnorm_load_path' in train_config:
-        vec_env = VecNormalize.load(train_config['vecnorm_load_path'],
-                                    vec_env)
-    else:
-        vec_env = VecNormalize(vec_env,
-                            training=True,
-                            norm_obs=True,
-                            norm_reward=True,
-                            clip_obs=10.0,
-                            clip_reward=15.0,
-                            gamma=wandb.config.gamma,
-                            epsilon=1e-08)
 
     # ==============Model Setup=================
     # load model if configured, otherwise create new model (model loading should pair vecnorm loading)
@@ -133,7 +105,7 @@ if __name__ == "__main__":
                                device=train_config['device'])
     else:
         model = CustomPPO(
-            policy="MlpPolicy",
+            policy="MultiInputPolicy",
             env=vec_env,
             verbose=1,
             device=train_config['device'],
@@ -146,6 +118,7 @@ if __name__ == "__main__":
             vf_coef=train_config['vf_coef'],
             tensorboard_log=f"train_results/tensorboard/{run.id}",
             info_keys=logged_info_keys,
+            policy_kwargs=dict(features_extractor_class=LSTMFeatureExtractor)  # use LSTM feature extractor for MlpPolicy
             )
 
 

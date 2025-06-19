@@ -1,0 +1,31 @@
+# A simplified version in state_variables
+
+state_variables:
+  sequential: ["EspVehSpd", "EspLgtAccel",
+    
+    'DcdcCnseActPwr', 'TmsActPwr', 'VcuCalcnAccrPedlPosn']
+  non-sequential: ['mileage_from_start', 'time_from_start', 'nav_mileage_togo', 'nav_time_togo', 
+    'nav_speed_q20', 'nav_speed_q50', 'nav_speed_q80',
+    'VcuVehAvrgEgyCnseLongTime', 'VcuRealAccPedl', 'VcuVehAvrgEgyCnseIn25km', 
+    'VcuVehAvrgEgyCnseDrivingCyc', 'VcuVehAvrgEgyCnseIn10km', 'VcuVehAvrgEgyCnseIn25km', 
+    # 'TmsFrntWindLvl', 'TmsAcIntT', 'TmsDrvrAutT', 'TmsPassAutT', 'TmsAcEnvtlT', 'EmsAltiFac.1', 'BcuBattTMax', 'BcuBattTMin', 'BcuBattIntrHeatReq_heating', 'BcuBattIntrHeatReq_cooling', 'BcuBattIntrHeatReq_no'
+    ]
+# actual non-sequential state variables =  non-sequential + simulator_state_vars (17+6)
+action_space:
+  speed_grid: [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 80, 100, 120, 150, 200]
+  drive_power_grid: [0, 40, 50, 60, 70, 80, 90, 110, 120, 130]
+  gen_power_high: 100
+  gen_power_low: 3
+
+  
+reward_weight:  [0.5, 0.2, 0.15, 0.15]
+
+simulator_model_path: "reev_control/envs/Copy_of_REEVSimEnv_20250401_ert_shrlib_rtw/libreev.so" # path can be relative to the project root
+simulator_reward_vars: ['EmsEngSpd', 'EmsEngTqFlywh', 'FrntGerMotGenrPwr', 'EmsFuCns', 'BcuEnyMagtSoc']
+simulator_state_vars: ['EmsEngSpd', 'EmsEngTqFlywh', 'BcuEnyMagtSoc', 'BcuDchaPwrShoTiMax', 'BcuChrgPwrShoTiMax', 'BcuDchaPwrlongTiMax']
+simulator_fixed_input_cols: ["VcuRealAccPedl", "VcuCalcnAccrPedlPosn", "EspVehSpd", "DcdcCnseActPwr", "TmsActPwr",  "BcuBattTMax",  "BcuBattTMin"]
+
+obs_seq_len: 600  # in seconds, = 10 minutes
+data_start_index : 600  
+data_min_length: 1800
+step_size_in_seconds: 1
