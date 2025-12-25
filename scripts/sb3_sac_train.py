@@ -9,7 +9,7 @@ from wandb.integration.sb3 import WandbCallback
 
 from reev_control.envs import SimpleVehicleEnv, SimpleVehicleEnv2, SimpleVehicleEnv3
 from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper, InfoHistoryWrapper
-from reev_control.custom_ppo import CustomPPO
+from reev_control.custom_sac import CustomSAC
 from reev_control.common.lr_schedule import linear_schedule
 from reev_control.common.callbacks import WandbCallbackWithVecNorm
 
@@ -76,14 +76,15 @@ if __name__ == "__main__":
     train_config = {
         "n_envs": 16,  # number of parallel environments
         "policy_type": "MlpPolicy",
-        "total_timesteps": 50_000_000,
-        "n_steps": 1024,  # number of steps to run per environment per rollout
+        "total_timesteps": 5_000_000,  # total number of steps to train for
+        "buffer_size": 1_000_000,
+        "learning_starts": 3000,  # number of steps to collect before learning starts
         "batch_size": 512, 
-        "n_epochs": 10,
         "gamma": 0.95,   
-        "learning_rate": 3e-4,
-        "ent_coef": 0.05,
-        "vf_coef": 0.5,
+        "train_freq": 512,  # number of steps to collect before training
+        "gradient_steps": 1, 
+        "learning_rate": 1e-3,
+        "ent_coef": "auto",
         "device": 'cpu',
         # "model_load_path": "train_results/wandb/run-20250523_173837-czln0k89/files/model.zip"     # uaw this together with vecnorm_load_path
         # "vecnorm_load_path": ...
@@ -94,7 +95,7 @@ if __name__ == "__main__":
     # init wandb
     run = wandb.init(
         project="reev_control",
-        name="PPO_0611_env3_largeStepSocReward",
+        name="SAC_SimpleVehicleEnv3_0619_firstAttempt",
         config=config,
         sync_tensorboard=True,
         monitor_gym=True,
@@ -132,18 +133,19 @@ if __name__ == "__main__":
                                env=vec_env,
                                device=train_config['device'])
     else:
-        model = CustomPPO(
+        model = CustomSAC(
             policy="MlpPolicy",
             env=vec_env,
             verbose=1,
             device=train_config['device'],
-            n_steps=train_config['n_steps'],
+            learning_starts=train_config['learning_starts'],
+            buffer_size=train_config['buffer_size'],
             batch_size=wandb.config.batch_size,
-            n_epochs=wandb.config.n_epochs,
             gamma=wandb.config.gamma,
-            learning_rate=linear_schedule(train_config['learning_rate']),
+            train_freq=train_config['train_freq'],
+            gradient_steps=train_config['gradient_steps'],
+            # learning_rate=linear_schedule(train_config['learning_rate']),
             ent_coef=train_config['ent_coef'],
-            vf_coef=train_config['vf_coef'],
             tensorboard_log=f"train_results/tensorboard/{run.id}",
             info_keys=logged_info_keys,
             )
@@ -156,7 +158,7 @@ if __name__ == "__main__":
             WandbCallbackWithVecNorm(
                 gradient_save_freq=100,
                 model_save_path=f"train_results/models/{run.id}",
-                model_save_freq=10 * train_config['n_steps'],  # this is freq for rollout steps: on_step. set it equal to n_steps to save model every rollout call
+                model_save_freq=5000,  # this is freq for rollout steps: on_step. set it equal to n_steps to save model every rollout call
                 verbose=2)
                 ]),
         log_interval=1)

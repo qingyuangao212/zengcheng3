@@ -1,10 +1,10 @@
 import sys
 import time
 import numpy as np
-from stable_baselines3 import PPO
+from stable_baselines3 import SAC
 from stable_baselines3.common.utils import safe_mean
 
-class CustomPPO(PPO):
+class CustomSAC(SAC):
     def __init__(self, *args, info_keys=None, **kwargs):
         """
         Modified from stable_baselines3 OnPolicyAlgorithm.dump_logs.
@@ -28,15 +28,15 @@ class CustomPPO(PPO):
 
         if iteration > 0:
             self.logger.record("time/iterations", iteration, exclude="tensorboard")
+        self.logger.record("time/episodes", self._episode_num, exclude="tensorboard")
 
+        
         if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
             self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
             self.logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer]))
-
             # Record custom info_keys
             for key in self.info_keys:
                 self.logger.record(f"rollout/ep_{key}_mean", safe_mean([ep_info[key] for ep_info in self.ep_info_buffer]))
-
 
         self.logger.record("time/fps", fps)
         self.logger.record("time/time_elapsed", int(time_elapsed), exclude="tensorboard")
@@ -45,8 +45,12 @@ class CustomPPO(PPO):
         # other metrics
         self.logger.record("rollout/num_episodes", np.sum([loader.trajectory_counter for loader in self.get_env().get_attr("trajectory_loader")]))
 
+        if self.use_sde:
+            self.logger.record("train/std", (self.actor.get_std()).mean().item())  # type: ignore[operator]
 
         if len(self.ep_success_buffer) > 0:
             self.logger.record("rollout/success_rate", safe_mean(self.ep_success_buffer))
 
         self.logger.dump(step=self.num_timesteps)
+
+
