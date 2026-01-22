@@ -14,3 +14,5 @@ reev_control/envs/Copy_of_REEVSimEnv_20250401_ert_shrlib_rtw
 *__pycache__
 scripts/nohup_out.txt
 scripts/nohup_out2.txt
+eval_results/
+

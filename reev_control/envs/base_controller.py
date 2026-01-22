@@ -86,7 +86,7 @@ class BaseController:
 
 
 class BaseControllerV2:
-    """determine rsspd and torque by highest reward"""
+    """determine rspd and torque by highest reward"""
     def __init__(self):
 
 

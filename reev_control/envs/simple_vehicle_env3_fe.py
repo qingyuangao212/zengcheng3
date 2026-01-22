@@ -130,11 +130,8 @@ class SimpleVehicleEnv3FE(gym.Env):
         """
         if seed is not None:
             self.seed = seed
-        super().reset(
-            seed=self.seed, options=options
-        )  # when seed is none this doesn't change the np_random seed
-        self.trajectory = self.trajectory_loader.load_trajectory(
-        )  # need to aggregate data by step size
+        super().reset(seed=self.seed, options=options)  # when seed is none this doesn't change the np_random seed
+        self.trajectory = self.trajectory_loader.load_trajectory()  # need to aggregate data by step size
         self.step_idx = self.config['data_start_index']
 
         # reinit vehicle simulator with random start_soc

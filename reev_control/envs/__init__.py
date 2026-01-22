@@ -1,6 +1,6 @@
 from .vehicle_env import VehicleEnv
 from .trajectory_loader import TrajectoryLoader
-from .BaseController import BaseController
+from .base_controller import BaseController
 from .reward import step_reward
 from .simulator import Simulator
 from .utils import utils

@@ -7,7 +7,7 @@ import gymnasium as gym
 from gymnasium import spaces
 # It's important to write out the module despite the evns/__init__.py.  Avoid circular imports
 from reev_control.envs.trajectory_loader import TrajectoryLoader
-from reev_control.envs.BaseController import BaseController
+from reev_control.envs.base_controller import BaseController
 from reev_control.envs.simulator import Simulator   
 from reev_control.envs.reward import step_reward
 
