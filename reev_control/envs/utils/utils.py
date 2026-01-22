@@ -1,8 +1,9 @@
-__all__ = ["compute_drive_power", "efficiency_by_torque_and_rspd_spline", "min_rspd_by_power_spline", "initial_action_table", "spd_power_to_tq_spd"]
+__all__ = ["compute_drive_power", "efficiency_by_torque_and_rspd_spline", "min_rspd_by_power_spline", "initial_action_table", "spd_power_to_tq_rspd", "nvh_func"]
 
 import numpy as np
 import pandas as pd
-from scipy.interpolate import UnivariateSpline, RectBivariateSpline
+from scipy.interpolate import UnivariateSpline, RectBivariateSpline, RegularGridInterpolator
+
 
 """
 车辆动力学方程：
@@ -80,7 +81,7 @@ spd_power_to_rspd_interp = RegularGridInterpolator(
     values=data.values
     )
 
-def spd_power_to_tq_spd(spd, power):
+def spd_power_to_tq_rspd(spd, power):
     """
     计算给定车速和功率下的转速和扭矩
     :param spd: 车速
@@ -88,5 +89,71 @@ def spd_power_to_tq_spd(spd, power):
     :return: 转速和扭矩
     """
     rspd = spd_power_to_rspd_interp((spd, power))
-    tq = 60000/(2*np.pi) * power / rspd
+    tq = 9_550 * power / rspd
     return tq, rspd
+
+
+
+def interpolate_nvh_func():
+
+    file_path = 'reev_control/envs/utils/智能增程3.0_NVH奖励、惩罚设计_20250520.xlsx'
+    sheet_names = pd.ExcelFile(file_path).sheet_names
+
+    sheets_to_read = sheet_names[1:-2]
+    dfs = pd.read_excel(file_path, sheet_name=sheets_to_read)
+
+    processed_dfs = {}
+    for sheet_name, df in dfs.items():
+        df = df.iloc[:, 1:]
+        df.set_index(df.columns[0], inplace=True)
+        processed_dfs[sheet_name] = df
+
+    # Define sheet name mapping to numerical ranges
+    sheet_intervals = {
+        '0-30': (0, 30),
+        '30-40': (30, 40),
+        '40-50': (40, 50),
+        '50-60': (50, 60),
+        '60-70': (60, 70),
+        '70-80': (70, 80),
+        '80-90': (80, 90),
+        '90-100': (90, 100),
+        '100-110': (100, 110),
+        '120': (110, 120),
+        '>120': (120, 200)  
+    }
+
+    # Convert sheets into a numerical list
+    speed_values = []
+    grid_data = []  # Store all data as 3D array
+
+    for sheet_name, df in processed_dfs.items():
+        start, end = sheet_intervals[sheet_name]
+        speed_values.append(start)
+
+        # Convert DataFrame to numpy array (ensure consistency)
+        grid_data.append(df.to_numpy())  # Convert to float for interpolation
+
+        if start != end:  # If it's a range, duplicate the values at `end`
+            speed_values.append(end - 1e-4)
+            grid_data.append(df.to_numpy())
+
+    # Convert lists to numpy arrays
+    speed_values = np.array(speed_values)
+    grid_data = np.array(grid_data)  # Shape: (num_speeds, num_x, num_y)
+
+    # Get X and Y axis values from index & columns
+    x_values = processed_dfs[next(
+        iter(processed_dfs))].index.to_numpy(dtype=np.float64)
+    y_values = processed_dfs[next(
+        iter(processed_dfs))].columns.to_numpy(dtype=np.float64)
+
+    interp_func = RegularGridInterpolator((speed_values, x_values, y_values),
+                                          grid_data,
+                                          method='linear',
+                                          bounds_error=False,
+                                          fill_value=None)
+
+    return interp_func
+
+nvh_func = interpolate_nvh_func()

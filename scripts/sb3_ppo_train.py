@@ -122,7 +122,7 @@ if __name__ == "__main__":
                             norm_reward=True,
                             clip_obs=10.0,
                             clip_reward=15.0,
-                            gamma=wandb.config.gamma,
+                            gamma=train_config['gamma'],
                             epsilon=1e-08)
 
     # ==============Model Setup=================
@@ -140,7 +140,7 @@ if __name__ == "__main__":
             n_steps=train_config['n_steps'],
             batch_size=wandb.config.batch_size,
             n_epochs=wandb.config.n_epochs,
-            gamma=wandb.config.gamma,
+            gamma=train_config['gamma'],
             learning_rate=linear_schedule(train_config['learning_rate']),
             ent_coef=train_config['ent_coef'],
             vf_coef=train_config['vf_coef'],
@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
 
     model.learn(
-        total_timesteps=wandb.config.total_timesteps,
+        total_timesteps=train_config['total_timesteps'],
         callback=CallbackList([
             WandbCallbackWithVecNorm(
                 gradient_save_freq=100,

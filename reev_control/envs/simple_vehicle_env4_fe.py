@@ -2,6 +2,10 @@
 Instead of searching over feasible rspd and tq for best efficiency, use a predefined function to compute rspd and tq requests
 
 2025/06/09 add start/stop action, add file_list_file integration
+
+2025/06/18 add feature extractor: envrionment observation space is a Dict with full sequential data
+
+2026/01/04: add note, no controller used in v3
 """
 
 import os
@@ -12,14 +16,14 @@ import gymnasium as gym
 from gymnasium import spaces
 # It's important to write out the module despite the evns/__init__.py.  Avoid circular imports
 from reev_control.envs.trajectory_loader import TrajectoryLoader
-from reev_control.envs.base_controller import BaseControllerV2
+# from reev_control.envs.BaseController import BaseControllerV2
 from reev_control.envs.simulator import Simulator
 from reev_control.envs.reward import step_reward
 
 from reev_control.envs.utils import compute_drive_power, spd_power_to_tq_rspd
 
 
-class SimpleVehicleEnv3(gym.Env):
+class SimpleVehicleEnv4FE(gym.Env):
     """
     Custom Gymnasium environment for REEV engine control.
     
@@ -63,9 +67,8 @@ class SimpleVehicleEnv3(gym.Env):
 
         with open(config_path, "r") as f:
             self.config = yaml.safe_load(f)
-
         self.config.update(kwargs)  # update config with kwargs
-        self.seed = self.config.get('seed')
+        self.seed = self.config.get('seed')     # Note bug：if seed is passed then random number in reset (soc) will be the same every time
 
         self.step_size_in_seconds = self.config.get('step_size_in_seconds', 1)
         self.step_size_in_10ms = 100 * self.step_size_in_seconds
@@ -80,22 +83,30 @@ class SimpleVehicleEnv3(gym.Env):
             seed=self.config.get('seed')  # manages shuffling of data files; if not passed just random shuffle
         )
 
-        self.base_controller = None
+        # self.base_controller = None # deprecated
 
-        self.simulator = Simulator(
-            dll_path=self.config['simulator_model_path'])
+        self.simulator = Simulator(self.config['simulator_model_path'])
 
         self.reward_fn = lambda *args: step_reward(
             *args, self.config.get("reward_weights", [0.5, 0.2, 0.15, 0.15]
                                    ))  # allow setting reward weights
 
         # Define observation space
-        self.observation_space = spaces.Box(
-            low=-np.inf,
-            high=np.inf,
-            shape=(len(self.config["state_variables"]["sequential"]) * 3 +
-                   len(self.config["state_variables"]["non-sequential"]) +
-                   len(self.config['simulator_state_vars']), ))
+        self.observation_space = gym.spaces.Dict({
+            "sequential": gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(self.obs_seq_len, len(self.config["state_variables"]["sequential"])),
+                dtype=np.float32
+            ),
+            "non-sequential": gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(len(self.config["state_variables"]["non-sequential"]) +
+                   len(self.config['simulator_state_vars']),),
+                dtype=np.float32
+            )
+        })
 
         # Define action space
         self.action_space = spaces.Box(
@@ -120,15 +131,13 @@ class SimpleVehicleEnv3(gym.Env):
         """
         if seed is not None:
             self.seed = seed
-        super().reset(seed=self.seed, options=options)  # when seed is none this doesn't change the np_random seed
+        super().reset(seed=self.seed, options=options)  # np_random
         self.trajectory = self.trajectory_loader.load_trajectory()  # need to aggregate data by step size
         self.step_idx = self.config['data_start_index']
 
         # reinit vehicle simulator with random start_soc
-        initial_soc = self.np_random.uniform(16, 20)
-        self.simulator.reset(
-            fixed_inputs={"BcuEnyMagtSoc_Inital": initial_soc}
-            )
+        initial_soc = self.np_random.uniform(50, 60)
+        self.simulator.reset({"BcuEnyMagtSoc_Inital": initial_soc})
 
         # Initialize self.state to all zeros except SOC
         initial_simulated_state = dict.fromkeys(
@@ -142,6 +151,7 @@ class SimpleVehicleEnv3(gym.Env):
     def step(self, action):
         """
         RL action是一个给下游控制器查表用的速度，驱动功率对应的表格
+
         Step包括以下步骤：
         1. 计算在一个RL step中对应的10ms单位速度和驱动功率序列, 作为BaseController输入
         2. 计算BaseController结果：基于action中的RL规划的发电功率表格，最小NVH限制；输出：10ms单位扭矩转速请求序列
@@ -166,7 +176,7 @@ class SimpleVehicleEnv3(gym.Env):
             power_request_seq = np.zeros_like(speed_seq)
             torque_request_seq, rspd_request_seq = np.zeros_like(speed_seq), np.zeros_like(speed_seq)
 
-        else:   # action[1] >= 0.5
+        else:   # action[1] < 0.5
             power_request_seq = np.tile(constant_power_request, len(speed_seq))  # constant
             torque_request_seq, rspd_request_seq = spd_power_to_tq_rspd(speed_seq, power_request_seq)
 
@@ -207,7 +217,7 @@ class SimpleVehicleEnv3(gym.Env):
         info.update(reward_info)
 
         self.step_idx += self.step_size_in_seconds  # update step_idx must preceed compute_observation
-        # compute s prime
+        # compute s_prime
         simulated_states = simulator_outputs_df.iloc[-1].loc[
             self.config['simulator_state_vars']].to_dict()
         self.state = self._compute_observation(simulated_states)
@@ -217,20 +227,22 @@ class SimpleVehicleEnv3(gym.Env):
         return self.state, step_reward, done, truncated, info
 
     def _get_sequential_data(self):
+        
         """sequential data are aggregated by minute, and padded to fixed length"""
         cols = self.config["state_variables"]["sequential"]
         start_idx = max(0, self.step_idx - self.obs_seq_len + 1)
 
-        # draw sequential data and non-sequential data from trajectory, using step_index
-        sequential_data = self.trajectory.iloc[start_idx:self.step_idx +
-                                               1][cols]
+        sequential_data = self.trajectory.iloc[start_idx:self.step_idx + 1][cols]
 
-        out = np.concatenate([
-            sequential_data.mean(),
-            sequential_data.std(), sequential_data.iloc[-1]
-        ])
+        # pad with zeros at the front if not enough length
+        if len(sequential_data) < self.obs_seq_len:
+            pad_len = self.obs_seq_len - len(sequential_data)
+            pad = np.zeros((pad_len, len(cols)))
+            sequential_data = np.vstack([pad, sequential_data.values])
+        else:
+            sequential_data = sequential_data.values
 
-        return out
+        return sequential_data
 
     def _get_non_sequential_data(self):
 
@@ -251,31 +263,50 @@ class SimpleVehicleEnv3(gym.Env):
             dict: Dictionary containing 'sequential' and 'state' keys.
         """
 
-        sequential_data = self._get_sequential_data()
+        sequential_data = self._get_sequential_data().astype(np.float32)
 
         non_sequential_data = self._get_non_sequential_data()
 
         # Add simulator values (always update tq, n, soc before updating state)
-        obs = np.append(np.concatenate([sequential_data, non_sequential_data]),
-                        list(simulated_states.values())).astype(np.float32)
+        non_sequential_data = np.append(non_sequential_data, list(simulated_states.values())).astype(np.float32)
 
+        obs = {
+            "sequential": sequential_data,
+            "non-sequential": non_sequential_data
+        }
+        
         return obs
 
+    # def _compute_speed_and_power_seq(self):
+
+    #     start_speed = self.trajectory['EspVehSpd'].iloc[self.step_idx]
+    #     end_speed = self.trajectory['EspVehSpd'].iloc[self.step_idx + 1] 
+    #     speed_seq = np.linspace(start_speed, end_speed,
+    #                             self.step_size_in_10ms + 1)[:-1]
+
+    #     # 1.b compute drive_power every 10ms （发动机外特性查表）
+    #     constant_accel = (end_speed - start_speed) / self.step_size_in_seconds
+    #     drive_power_seq = compute_drive_power(speed_seq, constant_accel)
+    #     return speed_seq, drive_power_seq
+    
     def _compute_speed_and_power_seq(self):
+        """Note: trajectory data is in seconds, but need to output sequence in 10ms frequency. Upsample 100 times"""
+        upsample = 100
+        speed_points = self.trajectory['EspVehSpd'].iloc[
+            self.step_idx:self.step_idx + self.step_size_in_seconds + 1].to_numpy()  # speed at every second within the step_size
+        
+        speed_seq = np.concatenate([
+            np.linspace(speed_points[i], speed_points[i+1], upsample, endpoint=False)
+            for i in range(len(speed_points)-1)
+        ])  # speed array every 10ms
 
-        start_speed = self.trajectory['EspVehSpd'].iloc[self.step_idx]
-        end_speed = self.trajectory['EspVehSpd'].iloc[
-            self.step_idx + 1]  # assertion above guarantee validity here
-        speed_seq = np.linspace(start_speed, end_speed,
-                                self.step_size_in_10ms + 1)[:-1]
+        acc_seq = np.repeat((speed_points[1:] - speed_points[:-1]), upsample)   # acceleration 
 
-        # 1.b compute drive_power every 10ms （发动机外特性查表）
-        constant_accel = (end_speed - start_speed) / self.step_size_in_seconds
-        drive_power_seq = compute_drive_power(speed_seq, constant_accel)
+        drive_power_seq = compute_drive_power(speed_seq, acc_seq)
         return speed_seq, drive_power_seq
 
     def _run_simulator(self, torque_request_seq, rspd_request_seq):
-
+        """returns a dataframe"""
         simulator_inputs = self.trajectory.iloc[
             self.step_idx][self.config['simulator_fixed_input_cols']].to_dict(
             )  # load inputs from trajectory data
@@ -293,20 +324,15 @@ class SimpleVehicleEnv3(gym.Env):
 
         simulator_outputs_df = pd.DataFrame(simulator_outputs)  # convert to df
 
-        simulator_outputs_df['EmsEngTqFlywh'] = simulator_outputs_df[
-            'EmsEngTqFlywh'].abs()
-        simulator_outputs_df['EmsFuCns'] = simulator_outputs_df[
-            'EmsFuCns'].abs()
-
         return simulator_outputs_df
 
-    def _get_obs_names(self):
-        #  shape=(self.config["state_variables"]["sequential"] * 3
-        #                + len(self.config["state_variables"]["non-sequential"])
-        #                + len(self.config['simulator_state_vars']), ))
-        names = [col+'_mean' for col in self.config["state_variables"]["sequential"]] + \
-                [col+'_std' for col in self.config["state_variables"]["sequential"]] + \
-                [col+'_last' for col in self.config["state_variables"]["sequential"]] + \
-                self.config["state_variables"]["non-sequential"] + \
-                self.config['simulator_state_vars']
-        return names
+    # def _get_obs_names(self):
+    #     #  shape=(self.config["state_variables"]["sequential"] * 3
+    #     #                + len(self.config["state_variables"]["non-sequential"])
+    #     #                + len(self.config['simulator_state_vars']), ))
+    #     names = [col+'_mean' for col in self.config["state_variables"]["sequential"]] + \
+    #             [col+'_std' for col in self.config["state_variables"]["sequential"]] + \
+    #             [col+'_last' for col in self.config["state_variables"]["sequential"]] + \
+    #             self.config["state_variables"]["non-sequential"] + \
+    #             self.config['simulator_state_vars']
+    #     return names

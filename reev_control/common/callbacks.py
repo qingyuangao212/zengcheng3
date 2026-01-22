@@ -11,7 +11,7 @@ class InfoLogCallback(WandbCallback):
     """
 
     METRIC_KEYS = [
-        'efficiency_reward', 'step_soc_reward', 'end_soc_reward', 'action_norm'
+        'fc_reward', 'efficiency_reward', 'step_soc_reward', 'end_soc_reward', 'action_norm'
     ]
 
     def __init__(self, *args, **kwargs):
@@ -59,25 +59,56 @@ class WandbCallbackWithVecNorm(WandbCallback):
                                               "vec_env.pkl")
 
     def save_model(self) -> None:
-        self.model.save(self.path)
-        wandb.save(self.path, base_path=self.model_save_path)
+        # call parent class method to save the model + wandb logging
+        super().save_model()
 
-        self.model.env.save(self.vecnormalize_path)  # vec_env
-        wandb.save(self.vecnormalize_path,
-                   base_path=self.model_save_path)  # sync to wandb folder?
+        # save VecNormalize env if exists
+        vec_norm_env = self.model.get_vec_normalize_env()
 
-        # save the obs_rms stats
-        obs_rms_dict = {
-            "mean": self.model.env.obs_rms.mean.tolist(),
-            "var": self.model.env.obs_rms.var.tolist()
-        }
-        with open(os.path.join(self.model_save_path, "vecnorm_params.json"), "w") as f:
-            json.dump(obs_rms_dict, f, indent=4)
-        wandb.save(os.path.join(self.model_save_path, "vecnorm_params.json"),
-                   base_path=self.model_save_path)
+        if vec_norm_env is not None:
+            vec_norm_env.save(self.vecnormalize_path)
+            wandb.save(self.vecnormalize_path, base_path=self.model_save_path)
+
+            # # optionally save obs_rms stats as JSON
+            # obs_rms_dict = {
+            #     "mean": vec_norm_env.obs_rms.mean.tolist(),
+            #     "var": vec_norm_env.obs_rms.var.tolist()
+            # }
+            # json_path = os.path.join(self.model_save_path,
+            #                          "vecnorm_params.json")
+            # with open(json_path, "w") as f:
+            #     json.dump(obs_rms_dict, f, indent=4)
+            # wandb.save(json_path, base_path=self.model_save_path)
 
         if self.verbose > 1:
-            logger.info(f"Saving model checkpoint to {self.path}")
             logger.info(
                 f"Saving vecnormalize env checkpoint to {self.vecnormalize_path}"
             )
+
+
+    # def save_model(self) -> None:
+    #     self.model.save(self.path)
+    #     wandb.save(self.path, base_path=self.model_save_path)
+
+    #     vec_norm_env = self.model.get_vec_normalize_env()
+    #     if vec_norm_env is not None:
+    #         vec_norm_env.save(self.vecnormalize_path)
+
+    #     wandb.save(self.vecnormalize_path,
+    #                base_path=self.model_save_path)  # sync to wandb folder?
+
+    #     # save the obs_rms stats
+    #     obs_rms_dict = {
+    #         "mean": self.model.env.obs_rms.mean.tolist(),
+    #         "var": self.model.env.obs_rms.var.tolist()
+    #     }
+    #     with open(os.path.join(self.model_save_path, "vecnorm_params.json"), "w") as f:
+    #         json.dump(obs_rms_dict, f, indent=4)
+    #     wandb.save(os.path.join(self.model_save_path, "vecnorm_params.json"),
+    #                base_path=self.model_save_path)
+
+    #     if self.verbose > 1:
+    #         logger.info(f"Saving model checkpoint to {self.path}")
+    #         logger.info(
+    #             f"Saving vecnormalize env checkpoint to {self.vecnormalize_path}"
+    #         )

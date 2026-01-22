@@ -1,9 +1,11 @@
 """2025/05/22A version with simplified action space: power request only
-Instead of searching over feasible rspd and tq for best efficiency, use a predefined function to comute rspd and tq requests
+Instead of searching over feasible rspd and tq for best efficiency, use a predefined function to compute rspd and tq requests
 
 2025/06/09 add start/stop action, add file_list_file integration
 
 2025/06/18 add feature extractor: envrionment observation space is a Dict with full sequential data
+
+2026/01/04: add note, no controller used in v3
 """
 
 import os
@@ -18,7 +20,7 @@ from reev_control.envs.trajectory_loader import TrajectoryLoader
 from reev_control.envs.simulator import Simulator
 from reev_control.envs.reward import step_reward
 
-from reev_control.envs.utils import compute_drive_power, spd_power_to_tq_spd
+from reev_control.envs.utils import compute_drive_power, spd_power_to_tq_rspd
 
 
 class SimpleVehicleEnv3FE(gym.Env):
@@ -81,10 +83,9 @@ class SimpleVehicleEnv3FE(gym.Env):
             seed=self.config.get('seed')  # manages shuffling of data files; if not passed just random shuffle
         )
 
-        self.base_controller = None
+        # self.base_controller = None # deprecated
 
-        self.simulator = Simulator(
-            dll_path=self.config['simulator_model_path'])
+        self.simulator = Simulator(self.config['simulator_model_path'])
 
         self.reward_fn = lambda *args: step_reward(
             *args, self.config.get("reward_weights", [0.5, 0.2, 0.15, 0.15]
@@ -151,6 +152,7 @@ class SimpleVehicleEnv3FE(gym.Env):
     def step(self, action):
         """
         RL action是一个给下游控制器查表用的速度，驱动功率对应的表格
+
         Step包括以下步骤：
         1. 计算在一个RL step中对应的10ms单位速度和驱动功率序列, 作为BaseController输入
         2. 计算BaseController结果：基于action中的RL规划的发电功率表格，最小NVH限制；输出：10ms单位扭矩转速请求序列
@@ -175,9 +177,9 @@ class SimpleVehicleEnv3FE(gym.Env):
             power_request_seq = np.zeros_like(speed_seq)
             torque_request_seq, rspd_request_seq = np.zeros_like(speed_seq), np.zeros_like(speed_seq)
 
-        else:   # action[1] >= 0.5
+        else:   # action[1] < 0.5
             power_request_seq = np.tile(constant_power_request, len(speed_seq))  # constant
-            torque_request_seq, rspd_request_seq = spd_power_to_tq_spd(speed_seq, power_request_seq)
+            torque_request_seq, rspd_request_seq = spd_power_to_tq_rspd(speed_seq, power_request_seq)
 
         info.update({
             "start_speed": speed_seq[0],
@@ -216,7 +218,7 @@ class SimpleVehicleEnv3FE(gym.Env):
         info.update(reward_info)
 
         self.step_idx += self.step_size_in_seconds  # update step_idx must preceed compute_observation
-        # compute s prime
+        # compute s_prime
         simulated_states = simulator_outputs_df.iloc[-1].loc[
             self.config['simulator_state_vars']].to_dict()
         self.state = self._compute_observation(simulated_states)
@@ -283,7 +285,7 @@ class SimpleVehicleEnv3FE(gym.Env):
         return speed_seq, drive_power_seq
 
     def _run_simulator(self, torque_request_seq, rspd_request_seq):
-
+        """returns a dataframe"""
         simulator_inputs = self.trajectory.iloc[
             self.step_idx][self.config['simulator_fixed_input_cols']].to_dict(
             )  # load inputs from trajectory data

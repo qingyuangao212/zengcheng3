@@ -14,17 +14,18 @@ action_space:
   gen_power_high: 100
   gen_power_low: 3
   
-reward_weight:  [0.5, 0.2, 0.15, 0.15]
+reward_weight:  [1, 1, 1, 10]
 
-simulator_model_path: "reev_control/envs/Copy_of_REEVSimEnv_20250401_ert_shrlib_rtw/libreev.so" # path can be relative to the project root
+simulator_model_path: "reev_control/envs/IRE3_20260105_ert_shrlib_rtw/libIRE3_20260105.so" # path can be relative to the project root
 simulator_reward_vars: ['EmsEngSpd', 'EmsEngTqFlywh', 'FrntGerMotGenrPwr', 'EmsFuCns', 'BcuEnyMagtSoc']
-simulator_state_vars: ['EmsEngSpd', 'EmsEngTqFlywh', 'BcuEnyMagtSoc', 'BcuDchaPwrShoTiMax', 'BcuChrgPwrShoTiMax', 'BcuDchaPwrlongTiMax']
+simulator_state_vars: ['EmsEngSpd', 'EmsEngTqFlywh', 'BcuEnyMagtSoc', 'BcuDchaPwrShoTiMax', 'BcuChrgPwrShoTiMax', 'BcuDchaPwrLongTiMax']
 simulator_fixed_input_cols: ["VcuRealAccPedl", "VcuCalcnAccrPedlPosn", "EspVehSpd", "DcdcCnseActPwr", "TmsActPwr",  "BcuBattTMax",  "BcuBattTMin"]
 
 obs_seq_len: 600  # in seconds, = 10 minutes
-data_start_index : 600  
-data_min_length: 1800
+data_start_index : 600  # this should > obs_seq_len 
+data_min_length: 3600
 step_size_in_seconds: 10
+
 
 
 
