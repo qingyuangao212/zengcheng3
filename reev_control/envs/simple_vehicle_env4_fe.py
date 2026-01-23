@@ -6,6 +6,11 @@ Instead of searching over feasible rspd and tq for best efficiency, use a predef
 2025/06/18 add feature extractor: envrionment observation space is a Dict with full sequential data
 
 2026/01/04: add note, no controller used in v3
+
+2026/01/20: new version v4
+
+2026/01/23： discovered bug in simulator.reset(), causes soc and all outputs to be 0
+change: make initial_soc random draw to be a class attribute and pass to step method 
 """
 
 import os
@@ -128,6 +133,9 @@ class SimpleVehicleEnv4FE(gym.Env):
 
         Returns:
             tuple: (initial observation, empty info dictionary).
+
+        
+
         """
         if seed is not None:
             self.seed = seed
@@ -136,17 +144,18 @@ class SimpleVehicleEnv4FE(gym.Env):
         self.step_idx = self.config['data_start_index']
 
         # reinit vehicle simulator with random start_soc
-        initial_soc = self.np_random.uniform(50, 60)
-        self.simulator.reset({"BcuEnyMagtSoc_Inital": initial_soc})
+        self.initial_soc  = self.np_random.uniform(50, 60)
+
+        # self.simulator.reset({"BcuEnyMagtSoc_Inital": self.initial_soc})  
 
         # Initialize self.state to all zeros except SOC
         initial_simulated_state = dict.fromkeys(
             self.config['simulator_state_vars'], 0)
-        initial_simulated_state['BcuEnyMagtSoc'] = initial_soc
+        initial_simulated_state['BcuEnyMagtSoc'] = self.initial_soc
 
         self.state = self._compute_observation(initial_simulated_state)
 
-        return self.state, {"BcuEnyMagtSoc": initial_soc}
+        return self.state, {"BcuEnyMagtSoc": self.initial_soc}
 
     def step(self, action):
         """
@@ -317,8 +326,9 @@ class SimpleVehicleEnv4FE(gym.Env):
                 "IniDesChTarTq_Nm": tq,
                 "IniDesChTarRotSpd_rpm": rspd,
             })
+
             result = self.simulator.step(
-                simulator_inputs
+                simulator_inputs | {"BcuEnyMagtSoc_Inital": self.initial_soc}
             )  # TBD: simulation inputs and outputs, let output be a dict with array values for now
             simulator_outputs.append(result)  # a list of dicts with same keys
 

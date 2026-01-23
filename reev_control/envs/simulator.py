@@ -189,18 +189,33 @@ if __name__ == "__main__":
         "VcuRealAccPedl": 0.0,
         "VcuCalcnAccrPedlPosn": 0.0,
         "EspVehSpd": 100,
-        # "BcuEnyMagtSoc_Inital": 20,
+        "BcuEnyMagtSoc_Inital": 20,
         "DcdcCnseActPwr": 1,
         "TmsActPwr": 1,
         "BcuBattTMax": 25,
         "BcuBattTMin": 25,
     }
 
+    init_inputs_soc = {
+        "IniDesChTarTq_Nm": 0,
+        "IniDesChTarRotSpd_rpm": 0,
+        "EmsAltiFac": 1.0,
+        "VcuRealAccPedl": 0.0,
+        "VcuCalcnAccrPedlPosn": 0.0,
+        "EspVehSpd": 100,
+        "BcuEnyMagtSoc_Inital": 20,
+        "DcdcCnseActPwr": 1,
+        "TmsActPwr": 1,
+        "BcuBattTMax": 25,
+        "BcuBattTMin": 25,
+    }
+
+
     # simulator_fixed_input_cols: ["VcuRealAccPedl", "VcuCalcnAccrPedlPosn", "EspVehSpd", "DcdcCnseActPwr", "TmsActPwr",  "BcuBattTMax",  "BcuBattTMin"]
 
 
     # Reset / initialize the model
-    sim.reset({  "BcuEnyMagtSoc_Inital": 20})
+    sim.reset(init_inputs_soc)
 
     print("reset soc: ", getattr(sim.outputs, 'BcuEnyMagtSoc'))
     # Run a few simulation steps
