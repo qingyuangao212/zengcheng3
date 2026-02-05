@@ -73,7 +73,9 @@ class SimpleVehicleEnv4FE(gym.Env):
         with open(config_path, "r") as f:
             self.config = yaml.safe_load(f)
         self.config.update(kwargs)  # update config with kwargs
-        self.seed = self.config.get('seed')     # Note bug：if seed is passed then random number in reset (soc) will be the same every time
+        self.seed = self.config.get(
+            'seed'
+        )  # Note bug：if seed is passed then random number in reset (soc) will be the same every time
 
         self.step_size_in_seconds = self.config.get('step_size_in_seconds', 1)
         self.step_size_in_10ms = 100 * self.step_size_in_seconds
@@ -84,8 +86,11 @@ class SimpleVehicleEnv4FE(gym.Env):
             data_folder=data_folder,
             step_size=self.step_size_in_seconds,
             min_length=self.config.get('data_min_length', 1800),
-            file_list_file=self.config.get('file_list_file', None),  # optional file list
-            seed=self.config.get('seed')  # manages shuffling of data files; if not passed just random shuffle
+            file_list_file=self.config.get('file_list_file',
+                                           None),  # optional file list
+            seed=self.config.get(
+                'seed'
+            )  # manages shuffling of data files; if not passed just random shuffle
         )
 
         # self.base_controller = None # deprecated
@@ -93,32 +98,32 @@ class SimpleVehicleEnv4FE(gym.Env):
         self.simulator = Simulator(self.config['simulator_model_path'])
 
         self.reward_fn = lambda *args: step_reward(
-            *args, self.config.get("reward_weights", [0.5, 0.2, 0.15, 0.15]
+            *args, self.config.get("reward_weights", [1, 1, 1, 1]
                                    ))  # allow setting reward weights
 
         # Define observation space
         self.observation_space = gym.spaces.Dict({
-            "sequential": gym.spaces.Box(
+            "sequential":
+            gym.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
-                shape=(self.obs_seq_len, len(self.config["state_variables"]["sequential"])),
-                dtype=np.float32
-            ),
-            "non-sequential": gym.spaces.Box(
+                shape=(self.obs_seq_len,
+                       len(self.config["state_variables"]["sequential"])),
+                dtype=np.float32),
+            "non-sequential":
+            gym.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
                 shape=(len(self.config["state_variables"]["non-sequential"]) +
-                   len(self.config['simulator_state_vars']),),
-                dtype=np.float32
-            )
+                       len(self.config['simulator_state_vars']), ),
+                dtype=np.float32)
         })
 
         # Define action space
         self.action_space = spaces.Box(
-            low=np.array([self.config['action_space']['gen_power_low'], 0]),    
-            high=np.array([self.config['action_space']['gen_power_high'], 1]),  
-            dtype=np.float32
-        )   # action[0] power, action[1] start/stop (0 or 1)
+            low=np.array([self.config['action_space']['gen_power_low'], 0]),
+            high=np.array([self.config['action_space']['gen_power_high'], 1]),
+            dtype=np.float32)  # action[0] power, action[1] start/stop (0 or 1)
 
     def reset(self, seed=None, options=None):
         """
@@ -134,19 +139,19 @@ class SimpleVehicleEnv4FE(gym.Env):
         Returns:
             tuple: (initial observation, empty info dictionary).
 
-        
-
         """
         if seed is not None:
             self.seed = seed
         super().reset(seed=self.seed, options=options)  # np_random
-        self.trajectory = self.trajectory_loader.load_trajectory()  # need to aggregate data by step size
+        self.trajectory = self.trajectory_loader.load_trajectory(
+        )  # need to aggregate data by step size
         self.step_idx = self.config['data_start_index']
 
         # reinit vehicle simulator with random start_soc
-        self.initial_soc  = self.np_random.uniform(50, 60)
+        self.initial_soc = self.np_random.uniform(30, 40)
 
-        # self.simulator.reset({"BcuEnyMagtSoc_Inital": self.initial_soc})  
+        self.simulator.reset({"BcuEnyMagtSoc_Inital": self.initial_soc})
+        # self.simulator = Simulator(self.config['simulator_model_path'])
 
         # Initialize self.state to all zeros except SOC
         initial_simulated_state = dict.fromkeys(
@@ -172,31 +177,41 @@ class SimpleVehicleEnv4FE(gym.Env):
         assert (self.step_idx < len(self.trajectory) - 1)
         assert (self.step_idx + self.step_size_in_seconds
                 < len(self.trajectory))
-        
+
         # 1.a compute speed every 10ms within the step: use the next step speed and assume constant acceleration
         speed_seq, drive_power_seq = self._compute_speed_and_power_seq()
 
         # parse action
-        engine_stop = action[1] >= 0.5 
+        engine_stop = action[1] >= 0.5
         constant_power_request = action[0]
 
         if engine_stop:
             # action[1] == 0 means stop, set speed to 0
             power_request_seq = np.zeros_like(speed_seq)
-            torque_request_seq, rspd_request_seq = np.zeros_like(speed_seq), np.zeros_like(speed_seq)
+            torque_request_seq, rspd_request_seq = np.zeros_like(
+                speed_seq), np.zeros_like(speed_seq)
 
-        else:   # action[1] < 0.5
-            power_request_seq = np.tile(constant_power_request, len(speed_seq))  # constant
-            torque_request_seq, rspd_request_seq = spd_power_to_tq_rspd(speed_seq, power_request_seq)
+        else:  # action[1] < 0.5
+            power_request_seq = np.tile(constant_power_request,
+                                        len(speed_seq))  # constant
+            torque_request_seq, rspd_request_seq = spd_power_to_tq_rspd(
+                speed_seq, power_request_seq)
 
         info.update({
-            "start_speed": speed_seq[0],
-            "end_speed": speed_seq[-1],
-            "drive_power": drive_power_seq[-1],
-            "action.engine_stop": engine_stop,
-            "action.power_request": np.nan if engine_stop else power_request_seq[-1],
-            "torque_request": torque_request_seq[-1],
-            "rspd_request": rspd_request_seq[-1]
+            "start_speed":
+            speed_seq[0],
+            "end_speed":
+            speed_seq[-1],
+            "drive_power":
+            drive_power_seq[-1],
+            "action.engine_stop":
+            engine_stop,
+            "action.power_request":
+            np.nan if engine_stop else power_request_seq[-1],
+            "torque_request":
+            torque_request_seq[-1],
+            "rspd_request":
+            rspd_request_seq[-1]
         })
 
         assert (len(speed_seq) == len(drive_power_seq) ==
@@ -236,12 +251,12 @@ class SimpleVehicleEnv4FE(gym.Env):
         return self.state, step_reward, done, truncated, info
 
     def _get_sequential_data(self):
-        
         """sequential data are aggregated by minute, and padded to fixed length"""
         cols = self.config["state_variables"]["sequential"]
         start_idx = max(0, self.step_idx - self.obs_seq_len + 1)
 
-        sequential_data = self.trajectory.iloc[start_idx:self.step_idx + 1][cols]
+        sequential_data = self.trajectory.iloc[start_idx:self.step_idx +
+                                               1][cols]
 
         # pad with zeros at the front if not enough length
         if len(sequential_data) < self.obs_seq_len:
@@ -277,19 +292,21 @@ class SimpleVehicleEnv4FE(gym.Env):
         non_sequential_data = self._get_non_sequential_data()
 
         # Add simulator values (always update tq, n, soc before updating state)
-        non_sequential_data = np.append(non_sequential_data, list(simulated_states.values())).astype(np.float32)
+        non_sequential_data = np.append(
+            non_sequential_data,
+            list(simulated_states.values())).astype(np.float32)
 
         obs = {
             "sequential": sequential_data,
             "non-sequential": non_sequential_data
         }
-        
+
         return obs
 
     # def _compute_speed_and_power_seq(self):
 
     #     start_speed = self.trajectory['EspVehSpd'].iloc[self.step_idx]
-    #     end_speed = self.trajectory['EspVehSpd'].iloc[self.step_idx + 1] 
+    #     end_speed = self.trajectory['EspVehSpd'].iloc[self.step_idx + 1]
     #     speed_seq = np.linspace(start_speed, end_speed,
     #                             self.step_size_in_10ms + 1)[:-1]
 
@@ -297,19 +314,23 @@ class SimpleVehicleEnv4FE(gym.Env):
     #     constant_accel = (end_speed - start_speed) / self.step_size_in_seconds
     #     drive_power_seq = compute_drive_power(speed_seq, constant_accel)
     #     return speed_seq, drive_power_seq
-    
+
     def _compute_speed_and_power_seq(self):
         """Note: trajectory data is in seconds, but need to output sequence in 10ms frequency. Upsample 100 times"""
         upsample = 100
         speed_points = self.trajectory['EspVehSpd'].iloc[
-            self.step_idx:self.step_idx + self.step_size_in_seconds + 1].to_numpy()  # speed at every second within the step_size
-        
+            self.step_idx:self.step_idx + self.step_size_in_seconds +
+            1].to_numpy()  # speed at every second within the step_size
+
         speed_seq = np.concatenate([
-            np.linspace(speed_points[i], speed_points[i+1], upsample, endpoint=False)
-            for i in range(len(speed_points)-1)
+            np.linspace(speed_points[i],
+                        speed_points[i + 1],
+                        upsample,
+                        endpoint=False) for i in range(len(speed_points) - 1)
         ])  # speed array every 10ms
 
-        acc_seq = np.repeat((speed_points[1:] - speed_points[:-1]), upsample)   # acceleration 
+        acc_seq = np.repeat((speed_points[1:] - speed_points[:-1]),
+                            upsample)  # acceleration
 
         drive_power_seq = compute_drive_power(speed_seq, acc_seq)
         return speed_seq, drive_power_seq

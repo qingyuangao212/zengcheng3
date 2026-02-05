@@ -1,8 +1,6 @@
 import os
 import pandas as pd
-import gymnasium as gym
 import numpy as np
-from gymnasium import spaces
 
 
 class TrajectoryLoader:
@@ -22,7 +20,7 @@ class TrajectoryLoader:
         - data_folder (str): Path to the folder containing trajectory CSV files.
         - step_size (int): The number of seconds
         - min_length (int): Minimum length of trajectory to be considered valid.
-        - file_list_file (list): Optional pickle file to load a list of file names.
+        - file_list_file: Path to a pickle file containing CSV filenames.
         """
 
         self.data_folder = data_folder
@@ -42,6 +40,10 @@ class TrajectoryLoader:
                 for f in os.listdir(self.data_folder) if f.endswith(".csv")
             ]
 
+        if not self.file_list:
+            raise FileNotFoundError(
+                f"No CSV files found in {self.data_folder}")
+
         self.np_random = np.random.default_rng(seed)  # set self.np_random
         self.reset()
         self.num_iterations = 0  # Track number of times all files have been iterated
@@ -57,19 +59,16 @@ class TrajectoryLoader:
         """Load the next CSV file and track iterations over the dataset.
            TBD: aggregate features by step_size, mostly by just taking last value
         """
-        if not self.file_list:
-            raise FileNotFoundError(
-                f"No CSV files found in {self.data_folder}")
-
+        
         while True:
+
+            data = pd.read_csv(self.file_name)
 
             self.file_idx += 1
             if self.file_idx >= len(self.file_list):
                 self.num_iterations += 1
                 self.reset()
-
-            data = pd.read_csv(self.file_name)
-
+                
             if len(data) < self.min_length:
                 print(
                     f"[TrajectoryLoader] Skipping {self.file_name} (len={len(data)} < min_len={self.min_length})"
@@ -87,6 +86,9 @@ class TrajectoryLoader:
 
         data = ad_hoc_processing(data)
         data = add_fake_navigation(data)
+
+        # data = data.iloc[::self.step_size].reset_index(drop=True)
+
         return data
 
     def get_iterations(self):

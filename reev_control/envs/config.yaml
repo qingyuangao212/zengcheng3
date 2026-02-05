@@ -14,7 +14,7 @@ action_space:
   gen_power_high: 100
   gen_power_low: 3
   
-reward_weight:  [1, 1, 1, 10]
+reward_weight:  [1, 1, 1, 1]
 
 simulator_model_path: "reev_control/envs/IRE3_20260105_ert_shrlib_rtw/libIRE3_20260105.so" # path can be relative to the project root
 simulator_reward_vars: ['EmsEngSpd', 'EmsEngTqFlywh', 'FrntGerMotGenrPwr', 'EmsFuCns', 'BcuEnyMagtSoc']

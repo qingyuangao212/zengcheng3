@@ -77,14 +77,15 @@ def end_soc_reward(soc, done: bool, worst_penalty=-1e4):
 #     return lower_bound_loss + upper_bound_loss
 
 
-def step_soc_reward(soc, UPPER_BOUND=80, LOWER_BOUND=12):
+def step_soc_reward(soc, UPPER_BOUND=75, LOWER_BOUND=15):
     """行驶过程中12%≤SOC≤30%，无奖励，但SOC超出此区间，给超出部分二次惩罚"""
-    if soc > UPPER_BOUND:
-        return -5
-    elif soc < LOWER_BOUND:
-        return -10
+    C = 2
+    if soc < LOWER_BOUND:
+        return -2 * C * (LOWER_BOUND - soc)**2
+    elif soc > UPPER_BOUND:
+        return -C * (soc - UPPER_BOUND)**2
     else:
-        return 0
+        return 0.0  
 
 
 def step_efficiency_reward(tq_seq, rspd_seq, fc_seq, dt_in_ms=10):

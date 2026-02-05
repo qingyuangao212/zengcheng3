@@ -112,3 +112,29 @@ class WandbCallbackWithVecNorm(WandbCallback):
     #         logger.info(
     #             f"Saving vecnormalize env checkpoint to {self.vecnormalize_path}"
     #         )
+
+from stable_baselines3.common.callbacks import BaseCallback
+import numpy as np 
+
+class AdvantageLoggingCallback(BaseCallback):
+    """
+    Logs PPO advantage statistics at the end of each rollout.
+    """
+
+    def _on_rollout_end(self) -> bool:
+        rb = self.model.rollout_buffer
+        if rb is not None and rb.advantages is not None:
+            adv = rb.advantages
+
+            # Use SB3 logger (TensorBoard → W&B)
+            self.logger.record("train/adv_mean", float(np.mean(adv)))
+            self.logger.record("train/adv_std", float(np.std(adv)))
+            self.logger.record("train/adv_max", float(np.max(adv)))
+            self.logger.record("train/adv_min", float(np.min(adv)))
+
+        return True
+    
+    def _on_step(self) -> bool:
+        # Required by BaseCallback, but we don't need per-step logic
+        return True
+    

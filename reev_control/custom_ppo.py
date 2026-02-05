@@ -18,6 +18,7 @@ class CustomPPO(PPO):
 
     def dump_logs(self, iteration: int = 0) -> None:
         """
+        Revised from on_policy_algorithm.py method.
         Write log including custom info_keys.
         """
         assert self.ep_info_buffer is not None
