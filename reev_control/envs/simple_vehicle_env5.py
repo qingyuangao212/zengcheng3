@@ -1,0 +1,299 @@
+"""2026/03/03 env5: change action space to Box
+- action: [engine_stop, power]
+- engine_stop: 0 = engine on, 1 = engine off
+- power: 0-100 kW power request
+
+Minimal changes from simple_vehicle_env4.py.
+"""
+
+import os
+import yaml
+import numpy as np
+import pandas as pd
+import gymnasium as gym
+from gymnasium import spaces
+# It's important to write out the module despite the evns/__init__.py.  Avoid circular imports
+from reev_control.envs.trajectory_loader import TrajectoryLoader
+# from reev_control.envs.BaseController import BaseControllerV2
+from reev_control.envs.simulator import Simulator
+from reev_control.envs.reward import step_reward
+
+from reev_control.envs.utils import compute_drive_power, spd_power_to_tq_rspd
+
+
+class SimpleVehicleEnv5(gym.Env):
+
+
+    def __init__(self,
+                 data_folder='data/train/REEV07RearDrive_Mar2025',
+                 config_path="reev_control/envs/config.yaml",
+                 **kwargs):
+        """
+        Initializes the VehicleTrajectoryEnv.
+
+        Args:
+            data_folder (str): Path to the folder containing trajectory CSV files.
+            simulator: Object handling system dynamics and low-level control.
+            reward_fn (function): Function to compute reward based on state, action, and simulator outputs.
+            config_path (str): Path to the environment configuration YAML file.
+        """
+        super().__init__()
+
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
+        self.config.update(kwargs)  # update config with kwargs
+        self.seed = self.config.get(
+            'seed'
+        )  # Note bug：if seed is passed then random number in reset (soc) will be the same every time
+
+        self.step_size_in_seconds = self.config.get('step_size_in_seconds', 10)
+        self.step_size_in_10ms = 100 * self.step_size_in_seconds
+
+        self.obs_seq_len = self.config.get("obs_seq_len", 30)
+
+        self.trajectory_loader = TrajectoryLoader(
+            data_folder=data_folder,
+            step_size=self.step_size_in_seconds,
+            min_length=self.config.get('data_min_length', 1800),
+            file_list_file=self.config.get('file_list_file',
+                                           None),  # optional file list
+            seed=self.config.get(
+                'seed'
+            )  # manages shuffling of data files; if not passed just random shuffle
+        )
+
+        # self.base_controller = None # deprecated
+
+        self.simulator = Simulator(self.config['simulator_model_path'])
+
+        self.reward_fn = lambda *args: step_reward(
+            *args, self.config.get("reward_weights", [1, 1, 1, 1])
+                                   )  # allow setting reward weights
+
+        # Define observation space
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(len(self.config["state_variables"]["sequential"]) * 5 +
+                   len(self.config["state_variables"]["non-sequential"]) +
+                   len(self.config['simulator_state_vars']), ))
+
+        # Define action space: Box([engine_stop, power])
+        # engine_stop: 0 = engine on, 1 = engine off
+        # power: power request in kW (0-100)
+        self.action_space = spaces.Box(
+            low=np.array([0, 0], dtype=np.float32),
+            high=np.array([1, 100], dtype=np.float32),
+            shape=(2,),
+            dtype=np.float32
+        )
+
+    def reset(self, seed=None, options=None):
+        """
+        Resets the environment at the beginning of an episode.
+
+        Loads the next trajectory file, resets the step index, initializes
+        state variables, and computes the initial observation.
+
+        Args:
+            seed (int, optional): Random seed for reproducibility.
+            options (dict, optional): Additional options for reset.
+
+        Returns:
+            tuple: (initial observation, empty info dictionary).
+
+        """
+        if seed is not None:
+            self.seed = seed
+        super().reset(seed=self.seed, options=options)  # np_random
+        self.trajectory = self.trajectory_loader.load_trajectory(
+        )  # need to aggregate data by step size
+        self.step_idx = self.config['data_start_index']
+
+        # reinit vehicle simulator with random start_soc
+        self.initial_soc = self.np_random.uniform(40, 60)
+
+        self.simulator.reset({"BcuEnyMagtSoc_Inital": self.initial_soc})
+        # self.simulator = Simulator(self.config['simulator_model_path'])
+
+        # Initialize self.state to all zeros except SOC
+        initial_simulated_state = dict.fromkeys(
+            self.config['simulator_state_vars'], 0)
+        initial_simulated_state['BcuEnyMagtSoc'] = self.initial_soc
+
+        self.state = self._compute_observation(initial_simulated_state)
+
+        return self.state, {"BcuEnyMagtSoc": self.initial_soc}
+
+    def step(self, action):
+        """
+        RL action is a Box [engine_stop, power]:
+        - engine_stop: 0 = engine on, 1 = engine off
+        - power: power request in kW (0-100)
+
+        Step包括以下步骤：
+        1. 计算在一个RL step中对应的10ms单位速度和驱动功率序列, 作为BaseController输入
+        2. 计算BaseController结果：基于action中的RL规划的发电功率表格，最小NVH限制；输出：10ms单位扭矩转速请求序列
+        3. 计算Simulator结果：simulator先load当前step的traj变量，然后Iterate over第二步计算的扭矩转速请求序列，输出真实扭矩转速序列
+        4. 计算reward, next state
+        """
+        # Parse action: Box([engine_stop, power])
+        engine_stop = int(np.clip(round(action[0]), 0, 1))  # 0 = engine on, 1 = engine off
+        # power bounds for interpolation are 3-100 kW
+        power = float(np.clip(action[1], 3.0, 100.0))
+
+        info = {}
+
+        assert (self.step_idx < len(self.trajectory) - 1)
+        assert (self.step_idx + self.step_size_in_seconds
+                < len(self.trajectory))
+
+        # 1.a compute speed every 10ms within the step: use the next step speed and assume constant acceleration
+        speed_seq, drive_power_seq = self._compute_speed_and_power_seq()
+
+        # parse action: engine_stop=1 means engine off
+        if engine_stop:
+            power_request_seq = np.zeros_like(speed_seq)
+            torque_request_seq, rspd_request_seq = np.zeros_like(
+                speed_seq), np.zeros_like(speed_seq)
+
+        else:
+            power_request_seq = np.tile(power, len(speed_seq))  # constant
+            torque_request_seq, rspd_request_seq = spd_power_to_tq_rspd(
+                speed_seq, power_request_seq)
+
+        info.update({
+            "start_speed": speed_seq[0],
+            "end_speed": speed_seq[-1],
+            "drive_power": drive_power_seq[-1],
+            "action.engine_stop": engine_stop,
+            "action.power_request": np.nan if engine_stop else power,
+            "torque_request": torque_request_seq[-1],
+            "rspd_request": rspd_request_seq[-1]
+        })
+
+        assert (len(speed_seq) == len(drive_power_seq) ==
+                len(torque_request_seq) == len(rspd_request_seq) ==
+                self.step_size_in_10ms)
+
+        # ================= 3. SIMULATOR =================
+        simulator_outputs_df = self._run_simulator(torque_request_seq,
+                                                   rspd_request_seq)
+
+        # ================= 4. RL done, reward, state_prime =================
+        # compute episode done flag: determine done if the next step cannot compute a s_prime
+        # meaning that two step sizes away, index is greater than the last index
+        done = (self.step_idx + 2 * self.step_size_in_seconds
+                > len(self.trajectory) - 1)
+
+        reward_inputs = simulator_outputs_df[
+            self.config['simulator_reward_vars']].to_dict(orient='list')
+        reward_inputs['speed_seq'] = speed_seq
+
+        info.update(simulator_outputs_df.iloc[-1].to_dict())
+
+        # compute step reward
+        step_reward, reward_info = self.reward_fn(reward_inputs, done)
+
+        info['done'] = done
+        info.update(reward_info)
+
+        self.step_idx += self.step_size_in_seconds  # update step_idx must preceed compute_observation
+        # compute s_prime
+        simulated_states = simulator_outputs_df.iloc[-1].loc[
+            self.config['simulator_state_vars']].to_dict()
+        self.state = self._compute_observation(simulated_states)
+
+        truncated = False  # No truncation for now, for the general case where done can be set:  truncated = done and (self.step_idx + 1 < len(self.trajectory) - 1)
+
+        return self.state, step_reward, done, truncated, info
+
+    def _get_sequential_data(self):
+        """sequential data are aggregated by minute, and padded to fixed length"""
+        cols = self.config["state_variables"]["sequential"]
+        start_idx = max(0, self.step_idx - self.obs_seq_len + 1)
+
+        # draw sequential data and non-sequential data from trajectory, using step_index
+        sequential_data = self.trajectory.iloc[start_idx:self.step_idx +
+                                               1][cols]
+
+        out = np.concatenate([
+            sequential_data.mean(),
+            sequential_data.std(),
+            sequential_data.max(),
+            sequential_data.median(),
+            sequential_data.iloc[-1]
+        ])
+
+        return out
+
+    def _get_non_sequential_data(self):
+
+        non_sequential_data = self.trajectory.iloc[self.step_idx][
+            self.config["state_variables"]["non-sequential"]].values
+
+        return non_sequential_data
+
+    def _compute_observation(self, simulated_states: dict):
+        """
+        Computes the current observation.
+
+        The observation includes:
+        - Sequential data: Past `obs_seq_len` steps of selected state variables.
+        - State data: Current step's state variables plus additional computed values.
+
+        Returns:
+            dict: Dictionary containing 'sequential' and 'state' keys.
+        """
+
+        sequential_data = self._get_sequential_data()
+
+        non_sequential_data = self._get_non_sequential_data()
+
+        # Add simulator values (always update tq, n, soc before updating state)
+        obs = np.append(np.concatenate([sequential_data, non_sequential_data]),
+                        list(simulated_states.values())).astype(np.float32)
+
+        return obs
+
+    def _compute_speed_and_power_seq(self):
+        """Note: trajectory data is in seconds, but need to output sequence in 10ms frequency. Upsample 100 times"""
+        upsample = 100
+        speed_points = self.trajectory['EspVehSpd'].iloc[
+            self.step_idx:self.step_idx + self.step_size_in_seconds +
+            1].to_numpy()  # speed at every second within the step_size
+
+        speed_seq = np.concatenate([
+            np.linspace(speed_points[i],
+                        speed_points[i + 1],
+                        upsample,
+                        endpoint=False) for i in range(len(speed_points) - 1)
+        ])  # speed array every 10ms
+
+        acc_seq = np.repeat((speed_points[1:] - speed_points[:-1]),
+                            upsample)  # acceleration
+
+        drive_power_seq = compute_drive_power(speed_seq, acc_seq)
+        return speed_seq, drive_power_seq
+
+    def _run_simulator(self, torque_request_seq, rspd_request_seq):
+        """returns a dataframe"""
+        simulator_inputs = self.trajectory.iloc[
+            self.step_idx][self.config['simulator_fixed_input_cols']].to_dict(
+            )  # load inputs from trajectory data
+        simulator_outputs = []
+        for (tq, rspd) in zip(torque_request_seq, rspd_request_seq):
+            # iterate over 10ms for simulator results
+            simulator_inputs.update({
+                "IniDesChTarTq_Nm": tq,
+                "IniDesChTarRotSpd_rpm": rspd,
+            })
+
+            result = self.simulator.step(
+                simulator_inputs | {"BcuEnyMagtSoc_Inital": self.initial_soc}
+            )  # TBD: simulation inputs and outputs, let output be a dict with array values for now
+            simulator_outputs.append(result)  # a list of dicts with same keys
+
+        simulator_outputs_df = pd.DataFrame(simulator_outputs)  # convert to df
+
+        return simulator_outputs_df
