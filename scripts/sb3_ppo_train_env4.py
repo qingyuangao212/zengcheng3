@@ -1,56 +1,58 @@
-import os
-import random
-
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
-from stable_baselines3.common.callbacks import CallbackList
-from stable_baselines3.common.monitor import Monitor
-
-import wandb
-from wandb.integration.sb3 import WandbCallback
-
-from reev_control.envs import SimpleVehicleEnv4
-from reev_control.envs.wrappers import ActionFlatteningWrapper, InfoSumWrapper, InfoHistoryWrapper
-from reev_control.custom_ppo import CustomPPO
-from reev_control.common.lr_schedule import linear_schedule
-from reev_control.common.callbacks import WandbCallbackWithVecNorm, AdvantageLoggingCallback
-from reev_control.common.feature_extractor import LSTMFeatureExtractor
-from stable_baselines3.common.callbacks import CheckpointCallback
+"""
+PPO training script for REEV control using SimpleVehicleEnv4.
+"""
 
 import argparse
+import datetime
+import os
+import random
+import uuid
 
-info_keys = ["fc_reward", "efficiency_reward", "step_soc_reward", "action.engine_stop", "action.power_request"]
-logged_info_keys = [key + '_sum' for key in info_keys] + [key + '_avg' for key in info_keys] + ["end_soc_reward"] # end_soc_reward is not summed, but logged at the end of episode
+import wandb
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+
+from reev_control.custom_ppo import CustomPPO
+from reev_control.common.callbacks import WandbCallbackWithVecNorm
+from reev_control.common.lr_schedule import linear_schedule
+from reev_control.envs import SimpleVehicleEnv4
+from reev_control.envs.wrappers import InfoHistoryWrapper
 
 
-def make_env(seed: int | None =None, **kwargs):
+# ==============================================================================
+# Configuration
+# ==============================================================================
 
-    def _init():
+INFO_KEYS = [
+    "fc_reward",
+    "efficiency_reward",
+    "step_soc_reward",
+    "action.engine_stop",
+    "action.power_request",
+]
+LOGGED_INFO_KEYS = (
+    [f"{key}_sum" for key in INFO_KEYS]
+    + [f"{key}_avg" for key in INFO_KEYS]
+    + ["end_soc_reward"]
+)
 
-        env = SimpleVehicleEnv4(data_folder='data/train/REEV07RearDrive_Mar2025',
-                            seed=seed, **kwargs)
-        env = InfoHistoryWrapper(env, info_keys=info_keys)  # sum all step info values to episode end info
-        env = Monitor(env, info_keywords=logged_info_keys)  # update info['episode'] with info_keys, when gets sent to ep_info_buffer
-        env.reset()  # not sure if vec env will still call reset again (can add print under env.reset to check)
-        return env
-
-    return _init
-
-env_config = {
-    # "env_class": "SimpleVehicleEnv4FE",  # simplified action space
+ENV_CONFIG = {
     "config_path": "reev_control/envs/config.yaml",
-    "obs_seq_len": 600,  # in seconds, = 10 minutes
+    "data_folder": "data/train/REEV07RearDrive_Mar2025",
+    "obs_seq_len": 600,
     "data_start_index": 600,
     "data_min_length": 3600,
     "step_size_in_seconds": 10,
     "reward_weights": [1, 1, 0.1, 0.05],
-    "file_list_file": "data/train/Mar2025_filtered_files.pkl"  # pickle file with list of files to load, if None, will load all files in data_folder
+    "file_list_file": "data/train/Mar2025_filtered_files.pkl",
 }
 
-train_config = {
-    "n_envs": 8,  # number of parallel environments
+TRAIN_CONFIG = {
+    "n_envs": 8,
     "policy_type": "MlpPolicy",
     "total_timesteps": 5_000_000,
-    "n_steps": 512,  # number of steps to run per environment per rollout
+    "n_steps": 512,
     "batch_size": 256,
     "n_epochs": 10,
     "gamma": 0.98,
@@ -59,126 +61,133 @@ train_config = {
     "ent_coef": 0.05,
     "vf_coef": 0.25,
     "device": "cpu",
-    "vecnorm_gamma": 0.95
+    "vecnorm_gamma": 0.95,
 }
 
-config = {**env_config, **train_config}
 
-if __name__ == "__main__":
+# ==============================================================================
+# Environment Factory
+# ==============================================================================
 
-    parser = argparse.ArgumentParser(description="Train or resume PPO model for reev_control")
-    parser.add_argument("--run", type=str, required=False, help="run name")
-    parser.add_argument("--notes", type=str, required=False, help="notes to add to wandb run")
-    parser.add_argument("--device", type=str, required=False, help="Device to train on (e.g., 'cpu', 'cuda:0', etc.)")
-    args = parser.parse_args()
+def make_env(seed: int | None = None, **kwargs):
+    """Create a wrapped environment instance."""
+    def _init():
+        env = SimpleVehicleEnv4(data_folder=ENV_CONFIG["data_folder"], seed=seed, **kwargs)
+        env = InfoHistoryWrapper(env, info_keys=INFO_KEYS)
+        env = Monitor(env, info_keywords=LOGGED_INFO_KEYS)
+        env.reset()
+        return env
+    return _init
 
+
+# ==============================================================================
+# Training
+# ==============================================================================
+
+def train(args: argparse.Namespace) -> None:
+    """Main training loop."""
     if args.device:
-        train_config['device'] = args.device
+        TRAIN_CONFIG["device"] = args.device
 
-    # os.environ['WANDB_INIT_TIMEOUT'] = '300'
     os.environ["WANDB_DIR"] = "train_results"
 
-    run_name = "PPO_env4_20260225"
-    if args.run:
-        run_name = args.run
+    run_name = args.run or "PPO_env4"
+    date_str = datetime.datetime.now().strftime("%Y%m%d")
+    run_id = f"{date_str}_{uuid.uuid4().hex[:8]}"
 
-    run_notes = """
-    try for longer run
-    """
-    if args.notes:
-        run_notes = args.notes
+    base_seed = random.randint(0, 100_000)
+    TRAIN_CONFIG["base_seed"] = base_seed
 
-    
-    # init wandb
     run = wandb.init(
         project="reev_control",
+        id=run_id,
         name=run_name,
-        config=config,
+        config={**ENV_CONFIG, **TRAIN_CONFIG},
         sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
-        notes="""
-        initial_soc 30-80
-        """
+        notes=args.notes,
     )
 
-    # run.notes = "previous run action converges to power 3kw or 99% stop engine, and in evaluation SOC goes<0; add stronger step_soc reward, tune params (lower gamma, increase entropy bonus)"
+    TRAIN_CONFIG["run_id"] = run.id
 
-    train_config['run_id'] = run.id
-
-    # ==============Environment Setup=================
-    # init vectorized environment
-    base_seed = random.randint(0, 100000)
+    # Create vectorized environment
     vec_env = SubprocVecEnv([
-        make_env(seed=base_seed + i, **env_config)
-        for i in range(train_config["n_envs"])
+        make_env(seed=base_seed + i)
+        for i in range(TRAIN_CONFIG["n_envs"])
     ])
 
-    # VecNormalize if configured, otherwise create new VecNormalize
-    if 'vecnorm_load_path' in train_config:
-        vec_env = VecNormalize.load(train_config['vecnorm_load_path'], vec_env)
+    # Normalize observations
+    if "vecnorm_load_path" in TRAIN_CONFIG:
+        vec_env = VecNormalize.load(TRAIN_CONFIG["vecnorm_load_path"], vec_env)
     else:
-        vec_env = VecNormalize(vec_env,
-                               training=True,
-                               norm_obs=True,
-                               norm_reward=False,
-                            #    clip_obs=10.0,
-                            #    clip_reward=15.0,\
-                            )
-
-    # ==============Model Setup=================
-    # load model if configured, otherwise create new model (model loading should pair vecnorm loading)
-    if 'model_load_path' in train_config:
-        model = CustomPPO.load(train_config['model_load_path'],
-                               env=vec_env,
-                               device=train_config['device'])
-    else:
-        model = CustomPPO(
-            policy=train_config['policy_type'],
-            env=vec_env,
-            verbose=1,
-            device=train_config['device'],
-            n_steps=train_config['n_steps'],
-            batch_size=wandb.config.batch_size,
-            n_epochs=wandb.config.n_epochs,
-            gamma=train_config['gamma'],
-            gae_lambda=train_config['gae_lambda'],
-            learning_rate=linear_schedule(train_config['learning_rate']),
-            ent_coef=train_config['ent_coef'],
-            vf_coef=train_config['vf_coef'],
-            tensorboard_log=f"train_results/tensorboard/{run.id}",
-            info_keys=logged_info_keys,
-            use_sde=True,
-            policy_kwargs=dict(squash_output=True)      # last two lines for applying tanh to action output and transform to (-1,1) then scale to action space
+        vec_env = VecNormalize(
+            vec_env,
+            training=True,
+            norm_obs=True,
+            norm_reward=False,
         )
 
-    model.learn(
+    # Create or load model
+    if "model_load_path" in TRAIN_CONFIG:
+        model = CustomPPO.load(
+            TRAIN_CONFIG["model_load_path"],
+            env=vec_env,
+            device=TRAIN_CONFIG["device"],
+        )
+    else:
+        model = CustomPPO(
+            policy=TRAIN_CONFIG["policy_type"],
+            env=vec_env,
+            verbose=1,
+            device=TRAIN_CONFIG["device"],
+            n_steps=TRAIN_CONFIG["n_steps"],
+            batch_size=wandb.config.batch_size,
+            n_epochs=wandb.config.n_epochs,
+            gamma=TRAIN_CONFIG["gamma"],
+            gae_lambda=TRAIN_CONFIG["gae_lambda"],
+            learning_rate=linear_schedule(TRAIN_CONFIG["learning_rate"]),
+            ent_coef=TRAIN_CONFIG["ent_coef"],
+            vf_coef=TRAIN_CONFIG["vf_coef"],
+            tensorboard_log=f"train_results/tensorboard/{run.id}",
+            info_keys=LOGGED_INFO_KEYS,
+            use_sde=True,
+            policy_kwargs=dict(squash_output=True),
+        )
 
-        total_timesteps=train_config['total_timesteps'],
-        callback=CallbackList([
-            # AdvantageLoggingCallback(),
-            WandbCallbackWithVecNorm(
-                gradient_save_freq=100,
-                model_save_path=f"train_results/models/{run.id}",
-                model_save_freq=10_000,
-                verbose=2), 
-                
-            CheckpointCallback(
-                save_freq=10_000,
-                save_path=f"train_results/models/{run.id}/checkpoints/",
-                name_prefix="ppo",
-                save_vecnormalize=True)
-        ]),
-        log_interval=1
+    callbacks = CallbackList([
+        WandbCallbackWithVecNorm(
+            gradient_save_freq=100,
+            model_save_path=f"train_results/models/{run.id}",
+            model_save_freq=10_000,
+            verbose=2,
+        ),
+        CheckpointCallback(
+            save_freq=10_000,
+            save_path=f"train_results/models/{run.id}/checkpoints/",
+            name_prefix="ppo",
+            save_vecnormalize=True,
+        ),
+    ])
+
+    model.learn(
+        total_timesteps=TRAIN_CONFIG["total_timesteps"],
+        callback=callbacks,
+        log_interval=1,
     )
 
-    # # Optionally, evaluate
-    # obs = vec_env.reset()
-    # for _ in range(1000):
-    #     action, _states = model.predict(obs)
-    #     obs, rewards, dones, infos = vec_env.step(action)
-
-    # vec_env.close()
     run.finish()
 
-# TBD
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train PPO model for REEV control")
+    parser.add_argument("--run", type=str, help="Run name for wandb")
+    parser.add_argument("--notes", type=str, help="Notes for wandb run")
+    parser.add_argument("--device", type=str, default="cpu", help="Device (e.g., 'cpu', 'cuda:0')")
+    args = parser.parse_args()
+
+    train(args)
