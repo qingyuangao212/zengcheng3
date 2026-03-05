@@ -39,7 +39,6 @@ LOGGED_INFO_KEYS = (
 
 ENV_CONFIG = {
     "config_path": "reev_control/envs/config.yaml",
-    "data_folder": "data/train/REEV07RearDrive_Mar2025",
     "obs_seq_len": 600,
     "data_start_index": 600,
     "data_min_length": 3600,
@@ -72,7 +71,7 @@ TRAIN_CONFIG = {
 def make_env(seed: int | None = None, **kwargs):
     """Create a wrapped environment instance."""
     def _init():
-        env = SimpleVehicleEnv4(data_folder=ENV_CONFIG["data_folder"], seed=seed, **kwargs)
+        env = SimpleVehicleEnv4(data_folder="data/train/REEV07RearDrive_Mar2025", seed=seed, **kwargs)
         env = InfoHistoryWrapper(env, info_keys=INFO_KEYS)
         env = Monitor(env, info_keywords=LOGGED_INFO_KEYS)
         env.reset()
@@ -91,8 +90,8 @@ def train(args: argparse.Namespace) -> None:
 
     os.environ["WANDB_DIR"] = "train_results"
 
-    run_name = args.run or "PPO_env4"
     date_str = datetime.datetime.now().strftime("%Y%m%d")
+    run_name = args.run or f"PPO_env4_{date_str}"
     run_id = f"{date_str}_{uuid.uuid4().hex[:8]}"
 
     base_seed = random.randint(0, 100_000)
@@ -109,11 +108,10 @@ def train(args: argparse.Namespace) -> None:
         notes=args.notes,
     )
 
-    TRAIN_CONFIG["run_id"] = run.id
 
     # Create vectorized environment
     vec_env = SubprocVecEnv([
-        make_env(seed=base_seed + i)
+        make_env(seed=base_seed + i, **ENV_CONFIG)
         for i in range(TRAIN_CONFIG["n_envs"])
     ])
 
@@ -165,7 +163,6 @@ def train(args: argparse.Namespace) -> None:
         CheckpointCallback(
             save_freq=10_000,
             save_path=f"train_results/models/{run.id}/checkpoints/",
-            name_prefix="ppo",
             save_vecnormalize=True,
         ),
     ])
