@@ -1,4 +1,5 @@
 import os
+import random
 
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
@@ -107,8 +108,9 @@ if __name__ == "__main__":
 
     # ==============Environment Setup=================
     # init vectorized environment
+    base_seed = random.randint(0, 100000)
     vec_env = SubprocVecEnv([
-        make_env(seed=100 + i, **env_config)
+        make_env(seed=base_seed + i, **env_config)
         for i in range(train_config["n_envs"])
     ])
 
