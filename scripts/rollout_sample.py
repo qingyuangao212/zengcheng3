@@ -1,12 +1,13 @@
 import os
 import argparse
+import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from reev_control.custom_ppo import CustomPPO
-from sb3_ppo_train_env4 import make_env, env_config
+from sb3_ppo_train_env4 import make_env, ENV_CONFIG
 
 
 def plot_episode(df: pd.DataFrame, save_path: str, episode_idx: int):
@@ -121,7 +122,8 @@ def main(args):
     # ----------------------------
     # Create environment
     # ----------------------------
-    dummy_vecenv = DummyVecEnv([make_env(**env_config)])
+    seed = args.seed if args.seed is not None else random.randint(0, 100_000)
+    dummy_vecenv = DummyVecEnv([make_env(seed=seed, **ENV_CONFIG)])
     dummy_vecenv = VecNormalize.load(vecnorm_path, dummy_vecenv)
 
     dummy_vecenv.training = False
@@ -166,6 +168,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--run", type=str, default="1cnx6npg")
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--num_episodes", type=int, default=10)
 
     parser.add_argument("--model_path", type=str, default=None)
