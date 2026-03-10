@@ -94,7 +94,7 @@ def train(args: argparse.Namespace) -> None:
     run_name = args.run or f"PPO_env4_{date_str}"
     run_id = f"{date_str}_{uuid.uuid4().hex[:8]}"
 
-    base_seed = random.randint(0, 100_000)
+    base_seed = args.seed if args.seed is not None else random.randint(0, 100_000)
     TRAIN_CONFIG["base_seed"] = base_seed
 
     run = wandb.init(
@@ -185,6 +185,7 @@ if __name__ == "__main__":
     parser.add_argument("--run", type=str, help="Run name for wandb")
     parser.add_argument("--notes", type=str, help="Notes for wandb run")
     parser.add_argument("--device", type=str, default="cpu", help="Device (e.g., 'cpu', 'cuda:0')")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed (default: random)")
     args = parser.parse_args()
 
     train(args)
