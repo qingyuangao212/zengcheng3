@@ -16,30 +16,30 @@ This is a **reinforcement learning project** for Range Extended Electric Vehicle
 
 ```bash
 # Train PPO on env4 (main entry point)
-python scripts/sb3_ppo_train_env4.py --run "my_run_name"
+uv run scripts/sb3_ppo_train_env4.py --run "my_run_name"
 
 # Train with custom device
-python scripts/sb3_ppo_train_env4.py --device cuda:0
+uv run scripts/sb3_ppo_train_env4.py --device cuda:0
 
 # Resume training
-python scripts/resume_training.py --model-path train_results/.../model.zip
+uv run scripts/resume_training.py --model-path train_results/.../model.zip
 
 # Train with feature extractor
-python scripts/sb3_ppo_train_fe.py
+uv run scripts/sb3_ppo_train_fe.py
 ```
 
 ### Evaluation
 
 ```bash
 # Evaluate trained model
-python scripts/evaluate_v3.py --model-path <path_to_model> --n-episodes 10
+uv run scripts/evaluate_v3.py --model-path <path_to_model> --n-episodes 10
 ```
 
 ### Inference
 
 ```bash
 # Run inference with feature extractor
-python scripts/inference_fe.py
+uv run scripts/inference_fe.py
 ```
 
 ### Installation
@@ -91,6 +91,9 @@ Training configs are defined in each script (e.g., `env_config`, `train_config` 
 - `step_size_in_seconds`: 10
 - `n_envs`: 8 (parallel environments)
 - `total_timesteps`: 5,000,000
+- `gamma`: 0.99
+- `gae_lambda`: 0.95
+- `vf_coef`: 0.15
 
 ## Known Issues
 

@@ -55,10 +55,13 @@ TRAIN_CONFIG = {
     "batch_size": 256,
     "n_epochs": 10,
     "gamma": 0.98,
+    # "gamma": 0.99,
     "gae_lambda": 0.98,
+    # "gae_lambda": 0.95,
     "learning_rate": 3e-4,
     "ent_coef": 0.05,
     "vf_coef": 0.25,
+    # "vf_coef": 0.15,
     "device": "cpu",
     "vecnorm_gamma": 0.95,
 }
@@ -83,10 +86,42 @@ def make_env(seed: int | None = None, **kwargs):
 # Training
 # ==============================================================================
 
+def parse_config_value(value: str):
+    """Parse value as int, float, bool, or keep as string."""
+    try:
+        return int(value)
+    except ValueError:
+        try:
+            return float(value)
+        except ValueError:
+            if value.lower() == "true":
+                return True
+            elif value.lower() == "false":
+                return False
+            return value
+
+
+def apply_cli_config(args: argparse.Namespace) -> None:
+    """Apply CLI args to ENV_CONFIG and TRAIN_CONFIG."""
+    for key in vars(args):
+        if key in ("run", "notes"):
+            continue
+        val = getattr(args, key)
+        if val is not None:
+            parsed_val = parse_config_value(val)
+            if key in TRAIN_CONFIG:
+                TRAIN_CONFIG[key] = parsed_val
+            elif key in ENV_CONFIG:
+                ENV_CONFIG[key] = parsed_val
+            else:
+                raise ValueError(f"Unknown config key: {key}")
+
+
 def train(args: argparse.Namespace) -> None:
     """Main training loop."""
-    if args.device:
-        TRAIN_CONFIG["device"] = args.device
+    global ENV_CONFIG, TRAIN_CONFIG
+
+    apply_cli_config(args)
 
     os.environ["WANDB_DIR"] = "train_results"
 
@@ -184,8 +219,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train PPO model for REEV control")
     parser.add_argument("--run", type=str, help="Run name for wandb")
     parser.add_argument("--notes", type=str, help="Notes for wandb run")
-    parser.add_argument("--device", type=str, default="cpu", help="Device (e.g., 'cpu', 'cuda:0')")
+    parser.add_argument("--device", type=str, default=None, help="Device (e.g., 'cpu', 'cuda:0')")
     parser.add_argument("--seed", type=int, default=None, help="Random seed (default: random)")
-    args = parser.parse_args()
 
+    # Add config keys as CLI arguments
+    for key in ENV_CONFIG:
+        if key not in ("config_path", "file_list_file"):
+            parser.add_argument(f"--{key}", type=str, default=None)
+    for key in TRAIN_CONFIG:
+        if key not in ("device",):
+            parser.add_argument(f"--{key}", type=str, default=None)
+
+    args = parser.parse_args()
     train(args)

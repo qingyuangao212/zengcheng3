@@ -4,6 +4,7 @@ import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from reev_control.custom_ppo import CustomPPO
@@ -16,12 +17,15 @@ def plot_episode(df: pd.DataFrame, save_path: str, episode_idx: int):
     ax2 (right): drive_power (kW) + power_request
     Highlight region where action.engine_stop == True
     """
+    # Set seaborn theme
+    sns.set_theme(style="whitegrid")
+    palette = sns.color_palette("muted")
 
     fig, ax1 = plt.subplots(figsize=(12, 6))
     t = np.arange(len(df))
 
     # -------------------------
-    # Highlight engine stop regions
+    # Highlight engine stop regions (very light shade)
     # -------------------------
     engine_stop = df["action.engine_stop"].astype(bool).values
 
@@ -33,22 +37,22 @@ def plot_episode(df: pd.DataFrame, save_path: str, episode_idx: int):
             in_region = True
             start_idx = i
         elif not val and in_region:
-            ax1.axvspan(start_idx, i, color="skyblue", alpha=0.15)
+            ax1.axvspan(start_idx, i, color="orange", alpha=0.1)
             in_region = False
 
     # If episode ends during engine stop
     if in_region:
-        ax1.axvspan(start_idx, len(engine_stop), color="skyblue", alpha=0.15)
+        ax1.axvspan(start_idx, len(engine_stop), color="orange", alpha=0.1)
 
     # -------------------------
     # Left axis (Speed + SOC)
     # -------------------------
     ax1.plot(t, df["end_speed"],
-             color="#1f77b4", alpha=0.8, linewidth=2,
+             color="#6baed6", alpha=0.6, linewidth=2,
              label="Speed")
 
     ax1.plot(t, df["BcuEnyMagtSoc"],
-             color="#2ca02c", alpha=0.8, linewidth=2,
+             color="#2ca02c", alpha=0.8, linewidth=3,
              label="SOC")
 
     ax1.set_xlabel("Time Step")
@@ -60,17 +64,37 @@ def plot_episode(df: pd.DataFrame, save_path: str, episode_idx: int):
     # -------------------------
     ax2 = ax1.twinx()
 
-    ax2.plot(t, df["drive_power"] / 1000.0,
-             color="#ff7f0e", alpha=0.8, linewidth=2,
+    # Highlight power_request NaN regions (engine stopped)
+    power_request = df["action.power_request"]
+    nan_mask = power_request.isna().values
+    in_nan = False
+    start_idx = 0
+    for i, val in enumerate(nan_mask):
+        if val and not in_nan:
+            in_nan = True
+            start_idx = i
+        elif not val and in_nan:
+            ax2.axvspan(start_idx, i, color="orange", alpha=0.2)
+            in_nan = False
+    if in_nan:
+        ax2.axvspan(start_idx, len(nan_mask), color="orange", alpha=0.2)
+
+    # Drive Power - gray, thinner line
+    drive_power_kw = df["drive_power"] / 1000.0
+    ax2.plot(t, drive_power_kw,
+             color="gray", alpha=0.5, linewidth=1.5,
              linestyle="--",
              label="Drive Power (kW)")
 
-    ax2.plot(t, df["action.power_request"],
-             color="#d62728", alpha=0.8, linewidth=2,
+    # Power Request - only plot non-NaN values
+    valid_mask = ~power_request.isna()
+    ax2.plot(t[valid_mask], power_request[valid_mask],
+             color="#d62728", alpha=0.8, linewidth=3,
              linestyle="-.",
              label="Power Request")
 
-    ax2.set_ylim(-50, 100)
+    # Fixed y-axis for powers
+    ax2.set_ylim(-150, 150)
     ax2.legend(loc="upper right")
 
     # -------------------------

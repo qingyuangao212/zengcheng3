@@ -66,11 +66,8 @@ class SimpleVehicleEnv4(gym.Env):
             data_folder=data_folder,
             step_size=self.step_size_in_seconds,
             min_length=self.config.get('data_min_length', 1800),
-            file_list_file=self.config.get('file_list_file',
-                                           None),  # optional file list
-            seed=self.config.get(
-                'seed'
-            )  # manages shuffling of data files; if not passed just random shuffle
+            file_list_file=self.config.get('file_list_file', None),  # optional file list
+            seed=self.seed  # manages shuffling of data files; if not passed just random shuffle
         )
 
         # self.base_controller = None # deprecated
@@ -130,15 +127,7 @@ class SimpleVehicleEnv4(gym.Env):
         return self.state, {"BcuEnyMagtSoc": self.initial_soc}
 
     def step(self, action):
-        """
-        RL action是一个给下游控制器查表用的速度，驱动功率对应的表格
-
-        Step包括以下步骤：
-        1. 计算在一个RL step中对应的10ms单位速度和驱动功率序列, 作为BaseController输入
-        2. 计算BaseController结果：基于action中的RL规划的发电功率表格，最小NVH限制；输出：10ms单位扭矩转速请求序列
-        3. 计算Simulator结果：simulator先load当前step的traj变量，然后Iterate over第二步计算的扭矩转速请求序列，输出真实扭矩转速序列
-        4. 计算reward, next state
-        """
+      
         action = action[0]  # convert single-element array to float
         info = {}
 

@@ -41,3 +41,7 @@ Thumbs.db
 
 # Simulator
 reev_control/envs/IRE3_20260105_ert_shrlib_rtw/
+
+.playwright-mcp
+.claude
+.mcp.json
