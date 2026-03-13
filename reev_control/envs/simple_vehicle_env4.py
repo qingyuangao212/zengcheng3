@@ -300,6 +300,36 @@ class SimpleVehicleEnv4(gym.Env):
 
         return simulator_outputs_df
 
+    def get_obs_names(self):
+        """
+        Get observation names based on config and observation computation.
+
+        Returns observation names in the same order as _compute_observation:
+        - Sequential data: seq_<var>_mean, seq_<var>_std, seq_<var>_max, seq_<var>_median, seq_<var>_last
+        - Non-sequential data: noseq_<var>
+        - Simulator state vars: sim_<var>
+        """
+        names = []
+
+        # Sequential data: 5 stats per variable (mean, std, max, median, last)
+        seq_vars = self.config["state_variables"]["sequential"]
+        suffixes = ['_mean', '_std', '_max', '_median', '_last']
+        for var in seq_vars:
+            for suffix in suffixes:
+                names.append(f"seq_{var}{suffix}")
+
+        # Non-sequential data
+        noseq_vars = self.config["state_variables"]["non-sequential"]
+        for var in noseq_vars:
+            names.append(f"noseq_{var}")
+
+        # Simulator state vars
+        sim_vars = self.config['simulator_state_vars']
+        for var in sim_vars:
+            names.append(f"sim_{var}")
+
+        return names
+
     # def _get_obs_names(self):
     #     #  shape=(self.config["state_variables"]["sequential"] * 3
     #     #                + len(self.config["state_variables"]["non-sequential"])
