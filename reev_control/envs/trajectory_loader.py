@@ -121,6 +121,8 @@ def add_fake_navigation(data: pd.DataFrame, n_quantiles=10) -> pd.DataFrame:
     - nav_mileage_togo: Estimated remaining mileage to go.
     - nav_time_togo: Estimated remaining time steps to go.
     - EspVehSpd_qX: Quantile values (X in [0, 100]) of 'EspVehSpd' from the current row to the end.
+    - nav_mileage_speed[0_30], nav_mileage_speed[30_60], nav_mileage_speed[60_90], nav_mileage_speed[90_inf]:
+      Remaining mileage segmented by speed bins from current position to end.
 
     Args:
         data (pd.DataFrame): Input DataFrame containing at least the columns 'CdcTotMilg' and 'EspVehSpd'.
@@ -150,5 +152,34 @@ def add_fake_navigation(data: pd.DataFrame, n_quantiles=10) -> pd.DataFrame:
     # Add new quantile columns
     for i, col in enumerate(nav_speed_quantiles):
         data[col] = [q[i] for q in quantiles_list]
+
+    # Speed bin mileage: remaining mileage segmented by speed bins
+    speed_bins = [0, 30, 60, 90, float('inf')]
+    bin_names = ['0_30', '30_60', '60_90', '90_inf']
+    n_rows = len(data)
+
+    distances = data['CdcTotMilg'].diff().fillna(0).values
+    speeds = data['EspVehSpd'].values
+
+    mileage_by_bin = {bin_name: np.zeros(n_rows) for bin_name in bin_names}
+
+    for idx in range(n_rows):
+        remaining_distances = distances[idx + 1:]
+        remaining_speeds = speeds[idx + 1:]
+
+        for bin_idx in range(len(speed_bins) - 1):
+            lower = speed_bins[bin_idx]
+            upper = speed_bins[bin_idx + 1]
+            bin_name = bin_names[bin_idx]
+
+            if upper == float('inf'):
+                mask = remaining_speeds >= lower
+            else:
+                mask = (remaining_speeds >= lower) & (remaining_speeds < upper)
+
+            mileage_by_bin[bin_name][idx] = remaining_distances[mask].sum()
+
+    for bin_name in bin_names:
+        data[f'nav_mileage_speed[{bin_name}]'] = mileage_by_bin[bin_name]
 
     return data

@@ -1,9 +1,10 @@
 state_variables:
   sequential: ["EspVehSpd", "EspLgtAccel",
-    'VcuVehAvrgEgyCnseDrivingCyc', 'VcuVehAvrgEgyCnseIn10km', 'VcuVehAvrgEgyCnseIn25km', 
+    'VcuVehAvrgEgyCnseDrivingCyc', 'VcuVehAvrgEgyCnseIn10km', 'VcuVehAvrgEgyCnseIn25km',
     'DcdcCnseActPwr', 'TmsActPwr', 'VcuCalcnAccrPedlPosn']
-  non-sequential: ['mileage_from_start', 'time_from_start', 'nav_mileage_togo', 'nav_time_togo', 
+  non-sequential: ['mileage_from_start', 'time_from_start', 'nav_mileage_togo', 'nav_time_togo',
     'nav_speed_q0', 'nav_speed_q10', 'nav_speed_q20', 'nav_speed_q30', 'nav_speed_q40', 'nav_speed_q50', 'nav_speed_q60', 'nav_speed_q70', 'nav_speed_q80', 'nav_speed_q90', 'nav_speed_q100',
+    'nav_mileage_speed[0_30]', 'nav_mileage_speed[30_60]', 'nav_mileage_speed[60_90]', 'nav_mileage_speed[90_inf]',
     'VcuVehAvrgEgyCnseLongTime', 'VcuRealAccPedl',
     # 'TmsFrntWindLvl', 'TmsAcIntT', 'TmsDrvrAutT', 'TmsPassAutT', 'TmsAcEnvtlT', 'EmsAltiFac.1', 'BcuBattTMax', 'BcuBattTMin', 'BcuBattIntrHeatReq_heating', 'BcuBattIntrHeatReq_cooling', 'BcuBattIntrHeatReq_no'
     ]
