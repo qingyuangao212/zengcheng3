@@ -146,12 +146,12 @@ def main(args):
     # ----------------------------
     # Create environment
     # ----------------------------
+    # ENV_CONFIG.update({"step_size_in_seconds": 5})
     seed = args.seed if args.seed is not None else random.randint(0, 100_000)
     dummy_vecenv = DummyVecEnv([make_env(seed=seed, **ENV_CONFIG)])
     dummy_vecenv = VecNormalize.load(vecnorm_path, dummy_vecenv)
 
     dummy_vecenv.training = False
-    dummy_vecenv.norm_reward = False
 
     # ----------------------------
     # Load model
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default=None)
     parser.add_argument("--vecnorm_path", type=str, default=None)
     parser.add_argument("--output_dir", type=str, default=None)
-
+    parser.add_argument("--checkpoint", type=int)
     args = parser.parse_args()
 
     main(args)

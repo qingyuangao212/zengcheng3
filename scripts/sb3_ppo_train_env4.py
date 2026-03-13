@@ -64,6 +64,8 @@ TRAIN_CONFIG = {
     # "vf_coef": 0.15,
     "device": "cpu",
     "vecnorm_gamma": 0.95,
+    "seed": 100,
+    "normalize_reward": False
 }
 
 
@@ -129,9 +131,6 @@ def train(args: argparse.Namespace) -> None:
     run_name = args.run or f"PPO_env4_{date_str}"
     run_id = f"{date_str}_{uuid.uuid4().hex[:8]}"
 
-    base_seed = args.seed if args.seed is not None else random.randint(0, 100_000)
-    TRAIN_CONFIG["base_seed"] = base_seed
-
     run = wandb.init(
         project="reev_control",
         id=run_id,
@@ -146,7 +145,7 @@ def train(args: argparse.Namespace) -> None:
 
     # Create vectorized environment
     vec_env = SubprocVecEnv([
-        make_env(seed=base_seed + i, **ENV_CONFIG)
+        make_env(seed=TRAIN_CONFIG['seed'] + i, **ENV_CONFIG)
         for i in range(TRAIN_CONFIG["n_envs"])
     ])
 
@@ -158,7 +157,7 @@ def train(args: argparse.Namespace) -> None:
             vec_env,
             training=True,
             norm_obs=True,
-            norm_reward=False,
+            norm_reward=TRAIN_CONFIG['normalize_reward'],
         )
 
     # Create or load model
@@ -220,7 +219,6 @@ if __name__ == "__main__":
     parser.add_argument("--run", type=str, help="Run name for wandb")
     parser.add_argument("--notes", type=str, help="Notes for wandb run")
     parser.add_argument("--device", type=str, default=None, help="Device (e.g., 'cpu', 'cuda:0')")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed (default: random)")
 
     # Add config keys as CLI arguments
     for key in ENV_CONFIG:
