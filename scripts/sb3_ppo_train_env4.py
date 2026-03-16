@@ -103,7 +103,7 @@ def parse_config_value(value: str):
             return value
 
 
-def apply_cli_config(args: argparse.Namespace) -> None:
+def     apply_cli_config(args: argparse.Namespace) -> None:
     """Apply CLI args to ENV_CONFIG and TRAIN_CONFIG."""
     for key in vars(args):
         if key in ("run", "notes"):
@@ -135,7 +135,7 @@ def train(args: argparse.Namespace) -> None:
         project="reev_control",
         id=run_id,
         name=run_name,
-        config={**ENV_CONFIG, **TRAIN_CONFIG},
+        config={"TRAIN_CONFIG": TRAIN_CONFIG, "ENV_CONFIG": ENV_CONFIG},
         sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,

@@ -12,7 +12,7 @@ from reev_control.common.callbacks import (
     AdvantageLoggingCallback,
 )
 
-from sb3_ppo_train_env4 import *
+from sb3_ppo_train_env4 import make_env
 
 
 
@@ -52,6 +52,12 @@ if __name__ == "__main__":
     )
 
     # --------------------------------------------------
+    # Load config from wandb run
+    # --------------------------------------------------
+    TRAIN_CONFIG = run.config["TRAIN_CONFIG"]
+    ENV_CONFIG = run.config["ENV_CONFIG"]
+
+    # --------------------------------------------------
     # Rebuild vectorized environment
     # --------------------------------------------------
     vec_env = SubprocVecEnv(
@@ -70,7 +76,7 @@ if __name__ == "__main__":
     )
 
     vec_env.training = True
-    vec_env.norm_reward = False
+    vec_env.norm_reward = TRAIN_CONFIG["normalize_reward"]
 
     # --------------------------------------------------
     # Load model
