@@ -22,16 +22,14 @@ from sb3_ppo_train_env4 import *
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Train or resume PPO model for reev_control")
-    parser.add_argument("--run", type=str, required=False)
-    parser.add_argument("--device", type=str, required=False, default="cuda:5", help="Device to train on (e.g., 'cpu', 'cuda:0', etc.)")
+    parser.add_argument("--run", type=str, required=True)
+    parser.add_argument("--device", type=str, required=False, default="cpu", help="Device to train on (e.g., 'cpu', 'cuda:0', etc.)")
     args = parser.parse_args()
 
     # ======================================================
     # Resume configuration
     # ======================================================
-    RESUME_RUN_ID = "mh45qn8k"
-    if args.run:
-        RESUME_RUN_ID = args.run
+    RESUME_RUN_ID = args.run
 
     MODEL_PATH = f"train_results/models/{RESUME_RUN_ID}/model.zip"
     VECNORM_PATH = f"train_results/models/{RESUME_RUN_ID}/vec_env.pkl"
@@ -58,8 +56,8 @@ if __name__ == "__main__":
     # --------------------------------------------------
     vec_env = SubprocVecEnv(
         [
-            make_env(seed=200 + i, **env_config)
-            for i in range(train_config["n_envs"])
+            make_env(seed=TRAIN_CONFIG["seed"] + i, **ENV_CONFIG)
+            for i in range(TRAIN_CONFIG["n_envs"])
         ]
     )
 
@@ -80,31 +78,19 @@ if __name__ == "__main__":
     model = CustomPPO.load(
         MODEL_PATH,
         env=vec_env,
-        device=args.device if args.device else train_config["device"],
+        device=args.device if args.device else TRAIN_CONFIG["device"],
     )
 
     print(f"[RESUME] model.num_timesteps = {model.num_timesteps:,}")
 
     # --------------------------------------------------
-    # Optional: train only until total = total_timesteps
-    # --------------------------------------------------
-    remaining_steps = max(
-        train_config["total_timesteps"] - model.num_timesteps,
-        0,
-    )
-
-    print(f"[RESUME] remaining_steps = {remaining_steps:,}")
-
-    if remaining_steps == 0:
-        print("Nothing to train. Exiting.")
-        run.finish()
-        exit(0)
-
-    # --------------------------------------------------
     # Resume training
     # --------------------------------------------------
+
+    print(f"[RESUME] current_timesteps = {model.num_timesteps:,}, target_total = {TRAIN_CONFIG['total_timesteps']:,}")
+
     model.learn(
-        total_timesteps=remaining_steps,
+        total_timesteps=TRAIN_CONFIG["total_timesteps"],
         reset_num_timesteps=False,   # 🔥 DO NOT REMOVE
         callback=CallbackList(
             [
