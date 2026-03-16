@@ -9,6 +9,7 @@ import os
 import random
 import uuid
 
+import torch
 import wandb
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -56,17 +57,17 @@ TRAIN_CONFIG = {
     "batch_size": 256,
     "n_epochs": 10,
     "gamma": 0.98,
-    # "gamma": 0.99,
-    "gae_lambda": 0.98,
-    # "gae_lambda": 0.95,
-    "learning_rate": 3e-4,
-    "ent_coef": 0.05,
-    "vf_coef": 0.25,
-    # "vf_coef": 0.15,
+    "gae_lambda": 0.95,  # Reduced from 0.98 for more bias, faster learning
+    "learning_rate": 1e-4,  # Reduced from 3e-4 for more stable training
+    "ent_coef": 0.01,  # Reduced from 0.05 for less aggressive exploration
+    "vf_coef": 0.15,  # Reduced from 0.25 to focus more on policy learning
     "device": "cpu",
     "vecnorm_gamma": 0.95,
     "seed": 100,
-    "normalize_reward": False
+    "normalize_reward": False,
+    # New training improvements
+    "use_ortho_init": True,  # Use orthogonal initialization for better gradients
+    "use_adamw": True,  # Use AdamW optimizer for better regularization
 }
 
 
@@ -166,6 +167,25 @@ def train(args: argparse.Namespace) -> None:
             device=TRAIN_CONFIG["device"],
         )
     else:
+        # Build policy_kwargs with training improvements
+        policy_kwargs = dict(squash_output=True)
+
+        # Increase model capacity: deeper and wider network
+        policy_kwargs["net_arch"] = dict(
+            pi=[128, 128],  # 2 layers, 128 units each (was 2x64)
+            vf=[128, 128],
+        )
+
+        # Note: Layer normalization requires custom policy in SB3
+        # ortho_init provides similar stability benefits
+
+        if TRAIN_CONFIG.get("use_ortho_init", False):
+            policy_kwargs["ortho_init"] = True
+
+        # Use AdamW optimizer for better regularization (passed via policy_kwargs)
+        if TRAIN_CONFIG.get("use_adamw", False):
+            policy_kwargs["optimizer_class"] = torch.optim.AdamW
+
         model = CustomPPO(
             policy=TRAIN_CONFIG["policy_type"],
             env=vec_env,
@@ -182,7 +202,7 @@ def train(args: argparse.Namespace) -> None:
             tensorboard_log=f"train_results/tensorboard/{run.id}",
             info_keys=LOGGED_INFO_KEYS,
             use_sde=True,
-            policy_kwargs=dict(squash_output=True),
+            policy_kwargs=policy_kwargs,
         )
 
     callbacks = CallbackList([
