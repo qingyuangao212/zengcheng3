@@ -1,5 +1,6 @@
 # simulator.py
 import ctypes
+import numpy as np
 
 
 # =========================
@@ -158,12 +159,18 @@ class Simulator:
         # Update inputs
         for name, value in step_inputs.items():
             if hasattr(self.inputs, name):
+                # Check for NaN/Inf before passing to C library
+                if not isinstance(value, (int, float)) or not np.isfinite(value):
+                    raise ValueError(f"Invalid input {name}={value!r} (must be finite number)")
                 setattr(self.inputs, name, value)
 
-        # Step the model
-        self._step_fn(ctypes.byref(self.model),
-                      ctypes.byref(self.inputs),
-                      ctypes.byref(self.outputs))
+        # Step the model — wrapped to catch crashes and log inputs
+        try:
+            self._step_fn(ctypes.byref(self.model),
+                          ctypes.byref(self.inputs),
+                          ctypes.byref(self.outputs))
+        except Exception as e:
+            raise RuntimeError(f"Simulator step failed with inputs={step_inputs!r}") from e
 
         # Return outputs as dict
         return {field[0]: getattr(self.outputs, field[0]) for field in self.outputs._fields_}
