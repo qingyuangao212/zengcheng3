@@ -43,5 +43,11 @@ Thumbs.db
 reev_control/envs/IRE3_20260105_ert_shrlib_rtw/
 
 .playwright-mcp
-.claude
+.claude/
 .mcp.json
+
+claude-code-notes
+presentation/
+discussion-notes.md
+.claude/settings.json
+artifact

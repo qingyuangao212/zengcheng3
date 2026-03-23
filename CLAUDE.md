@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Package Manager
 
-**Always use `uv` for all package management.** Do not use `pip` directly.
+**Always use `uv` for all package management.** Do not use `pip` or `python` directly.
 
 ## Project Overview
 
