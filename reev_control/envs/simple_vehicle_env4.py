@@ -17,7 +17,6 @@ change: make initial_soc random draw to be a class attribute and pass to step me
 
 """
 
-import os
 import yaml
 import numpy as np
 import pandas as pd
@@ -84,7 +83,7 @@ class SimpleVehicleEnv4(gym.Env):
             high=np.inf,
             shape=(len(self.config["state_variables"]["sequential"]) * 5 +
                    len(self.config["state_variables"]["non-sequential"]) +
-                   len(self.config['simulator_state_vars']), ))
+                   len(self.config['simulator_state_vars']) + 4, ))
 
         # Define action space
         self.action_space = spaces.Box(low=0, high=100, dtype=np.float32)  
@@ -227,6 +226,30 @@ class SimpleVehicleEnv4(gym.Env):
 
         return non_sequential_data
 
+    def _get_step_size_window_data(self):
+        """Get future mean and std of EspVehSpd and EspLgtAccel over the next `step_size_in_seconds` window."""
+        future_cols = ['EspVehSpd', 'EspLgtAccel']
+        # Future window: next step_size_in_seconds rows (trajectory is 1-second resolution)
+        future_end_idx = min(self.step_idx + self.step_size_in_seconds + 1, len(self.trajectory))
+        future_data = self.trajectory.iloc[self.step_idx + 1 : future_end_idx][future_cols]
+
+        # Pad if trajectory near end
+        if len(future_data) < self.step_size_in_seconds:
+            pad_len = self.step_size_in_seconds - len(future_data)
+            if len(future_data) > 0:
+                last_vals = future_data.iloc[-1]
+            else:
+                last_vals = self.trajectory.iloc[self.step_idx][future_cols]
+            pad_df = pd.DataFrame([last_vals] * pad_len, columns=future_cols)
+            future_data = pd.concat([future_data, pad_df], ignore_index=True)
+
+        return np.array([
+            future_data['EspVehSpd'].mean(),
+            future_data['EspVehSpd'].std(),
+            future_data['EspLgtAccel'].mean(),
+            future_data['EspLgtAccel'].std(),
+        ])
+
     def _compute_observation(self, simulated_states: dict):
         """
         Computes the current observation.
@@ -243,8 +266,10 @@ class SimpleVehicleEnv4(gym.Env):
 
         non_sequential_data = self._get_non_sequential_data()
 
+        step_size_window_data = self._get_step_size_window_data()
+
         # Add simulator values (always update tq, n, soc before updating state)
-        obs = np.append(np.concatenate([sequential_data, non_sequential_data]),
+        obs = np.append(np.concatenate([sequential_data, non_sequential_data, step_size_window_data]),
                         list(simulated_states.values())).astype(np.float32)
 
         return obs
@@ -325,6 +350,11 @@ class SimpleVehicleEnv4(gym.Env):
         noseq_vars = self.config["state_variables"]["non-sequential"]
         for var in noseq_vars:
             names.append(f"noseq_{var}")
+
+        # Step size window data (future speed/accel stats)
+        step_size_window_names = ['future_speed_mean', 'future_speed_std',
+                                  'future_accel_mean', 'future_accel_std']
+        names.extend(step_size_window_names)
 
         # Simulator state vars
         sim_vars = self.config['simulator_state_vars']
