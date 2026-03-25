@@ -182,6 +182,11 @@ class SimpleVehicleEnv4(gym.Env):
 
         info.update(simulator_outputs_df.iloc[-1].to_dict())
 
+        # Replace stored values with sequence statistics to match reward calculation
+        info['EmsFuCns'] = simulator_outputs_df['EmsFuCns'].sum()
+        info['EmsEngSpd'] = simulator_outputs_df['EmsEngSpd'].mean()
+        info['EmsEngTqFlywh'] = simulator_outputs_df['EmsEngTqFlywh'].mean()
+
         # compute step reward
         step_reward, reward_info = self.reward_fn(reward_inputs, done)
 
