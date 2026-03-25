@@ -3,6 +3,7 @@ PPO training script for REEV control using SimpleVehicleEnv4.
 """
 
 import argparse
+import ast
 import datetime
 import os
 import random
@@ -89,18 +90,15 @@ def make_env(seed: int | None = None, **kwargs):
 # ==============================================================================
 
 def parse_config_value(value: str):
-    """Parse value as int, float, bool, or keep as string."""
+    """Parse value as a Python literal (int, float, bool, list, dict, etc.)."""
     try:
-        return int(value)
-    except ValueError:
-        try:
-            return float(value)
-        except ValueError:
-            if value.lower() == "true":
-                return True
-            elif value.lower() == "false":
-                return False
-            return value
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        if value.lower() == "true":
+            return True
+        elif value.lower() == "false":
+            return False
+        return value
 
 
 def     apply_cli_config(args: argparse.Namespace) -> None:
