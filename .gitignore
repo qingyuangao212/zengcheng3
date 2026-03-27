@@ -60,3 +60,4 @@ reev_control/envs/simulator_formulas.tex
 scripts/rollout_test.ipynb
 scripts/test_simulator.ipynb
 scripts/rollout_test.ipynb
+scripts/test.ipynb
