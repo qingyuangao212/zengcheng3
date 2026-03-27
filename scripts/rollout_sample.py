@@ -191,8 +191,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--run", type=str, default="1cnx6npg")
-    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--run", type=str, required=True)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num_episodes", type=int, default=10)
 
     parser.add_argument("--model_path", type=str, default=None)

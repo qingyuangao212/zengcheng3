@@ -155,7 +155,7 @@ class SimpleVehicleEnv4(gym.Env):
         info.update({
             "start_speed": speed_seq[0],
             "end_speed": speed_seq[-1],
-            "drive_power": drive_power_seq[-1],
+            "drive_power": drive_power_seq.mean(),
             "action.engine_stop": engine_stop,
             "action.power_request": np.nan if engine_stop else action,
             "torque_request": torque_request_seq[-1],

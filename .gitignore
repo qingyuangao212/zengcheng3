@@ -51,3 +51,12 @@ presentation/
 discussion-notes.md
 .claude/settings.json
 artifact
+reev_control/envs/simulator_formulas_cn.md
+test_20260327.ipynb
+reev_control/envs/simulator_formulas_cn.tex
+reev_control/envs/simulator_formulas.md
+reev_control/envs/simulator_formulas.pdf
+reev_control/envs/simulator_formulas.tex
+scripts/rollout_test.ipynb
+scripts/test_simulator.ipynb
+scripts/rollout_test.ipynb
