@@ -87,7 +87,7 @@ class SimpleVehicleEnv4(gym.Env):
                    len(self.config['simulator_state_vars']), ))
 
         # Define action space
-        self.action_space = spaces.Box(low=0, high=100, dtype=np.float32)  
+        self.action_space = spaces.Box(low=0, high=50, dtype=np.float32)  
 
     def reset(self, seed=None, options=None):
         """

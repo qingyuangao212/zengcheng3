@@ -91,15 +91,15 @@ def step_soc_reward(soc, UPPER_BOUND=75, LOWER_BOUND=15):
 def step_efficiency_reward(tq_seq, rspd_seq, fc_seq, dt_in_ms=10):
 
     if np.all(rspd_seq==0):
-        return 0
+        return 0.2
 
     gen_energy_in_J = np.dot(tq_seq, rspd_seq)/9550 * dt_in_ms  # 总发电量， J= kW*ms
     F = np.sum(fc_seq)  # 总喷油量 = 每10ms喷油量之和
 
     if F==0:
-        return 0    # this is redundant, but just to be safe
+        return 0.2    # this is redundant, but just to be safe
     else:
-        eta = gen_energy_in_J / (F * 0.725 * 46) * 100   # 发电效率，单位：%
+        eta = gen_energy_in_J / (F * 0.725 * 46_000_000) * 100   # 发电效率，单位：%
 
     eta_rescaled = np.interp(x=eta, xp=[0, 23.8, 31.2, 38.6, 50], fp=np.array([-1, -0.5, 0, 0.5, 1]))
 
