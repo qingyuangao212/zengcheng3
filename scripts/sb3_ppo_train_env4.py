@@ -46,6 +46,7 @@ ENV_CONFIG = {
     "step_size_in_seconds": 10,
     "reward_weights": [1, 1, 0.1, 0.05],
     "file_list_file": "data/train/Mar2025_filtered_files.pkl",
+    "max_episode_steps": 300,
 }
 
 TRAIN_CONFIG = {

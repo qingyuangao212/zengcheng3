@@ -61,6 +61,7 @@ class SimpleVehicleEnv4(gym.Env):
         self.step_size_in_10ms = 100 * self.step_size_in_seconds
 
         self.obs_seq_len = self.config.get("obs_seq_len", 30)
+        self.max_episode_steps = self.config.get("max_episode_steps", 300)
 
         self.trajectory_loader = TrajectoryLoader(
             data_folder=data_folder,
@@ -124,6 +125,8 @@ class SimpleVehicleEnv4(gym.Env):
 
         self.state = self._compute_observation(initial_simulated_state)
 
+        self.current_step = 0
+
         return self.state, {"BcuEnyMagtSoc": self.initial_soc}
 
     def step(self, action):
@@ -171,10 +174,15 @@ class SimpleVehicleEnv4(gym.Env):
                                                    rspd_request_seq)
 
         # ================= 4. RL done, reward, state_prime =================
+        # Truncation check must come before done computation since truncation overrides done
+        self.current_step += 1
+        truncated = self.current_step >= self.max_episode_steps
+
         # compute episode done flag: determine done if the next step cannot compute a s_prime
         # meaning that two step sizes away, index is greater than the last index
+        # truncation overrides natural done so SB3's TimeLimit handling fires correctly
         done = (self.step_idx + 2 * self.step_size_in_seconds
-                > len(self.trajectory) - 1)
+                > len(self.trajectory) - 1) and not truncated
 
         reward_inputs = simulator_outputs_df[
             self.config['simulator_reward_vars']].to_dict(orient='list')
@@ -197,7 +205,9 @@ class SimpleVehicleEnv4(gym.Env):
             self.config['simulator_state_vars']].to_dict()
         self.state = self._compute_observation(simulated_states)
 
-        truncated = False  # No truncation for now, for the general case where done can be set:  truncated = done and (self.step_idx + 1 < len(self.trajectory) - 1)
+        if truncated:
+            info["terminal_observation"] = self.state
+            info["TimeLimit.truncated"] = True
 
         return self.state, step_reward, done, truncated, info
 
