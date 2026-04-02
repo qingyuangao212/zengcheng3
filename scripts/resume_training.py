@@ -67,6 +67,10 @@ if __name__ == "__main__":
         ]
     )
 
+    
+
+    print(f"[RESUME] vec_env.observation_space = {vec_env.observation_space}")
+
     # --------------------------------------------------
     # Load VecNormalize (MUST be before model load)
     # --------------------------------------------------

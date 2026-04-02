@@ -61,3 +61,6 @@ scripts/rollout_test.ipynb
 scripts/test_simulator.ipynb
 scripts/rollout_test.ipynb
 scripts/test.ipynb
+experiment_plan.md
+scripts/commands.sh
+scripts/test_mpi_env4.py

@@ -99,3 +99,54 @@ Training configs are defined in each script (e.g., `env_config`, `train_config` 
 
 - `InfoLogCallback` in `reev_control/common/callbacks.py` has potential issues with numpy operations
 - Duplicate `InfoSumWrapper` exists in both `envs/wrappers.py` and `common/info_sum_wrapper.py`
+
+## Network Access & VPN
+
+This machine is on a corporate network with firewall restrictions. Some external sites (Google, Hugging Face, etc.) may be blocked.
+
+### When WebFetch or WebSearch Fails Due to Firewall
+
+If `WebFetch` or `WebSearch` tools cannot access a URL (timeout, 000, or connection error):
+
+1. **Start the MonoCloud VPN** using the startup script:
+   ```bash
+   ~/memory/start-vpn.sh start
+   ```
+
+2. **Use `curl` with proxy** instead of `WebFetch`:
+   ```bash
+   # Option A: Use -x flag (one command only)
+   curl -x http://127.0.0.1:7890 -s https://blocked-site.com/content > ~/downloads/content.html
+
+   # Option B: Use env prefix (one command only)
+   https_proxy=http://127.0.0.1:7890 curl -s https://blocked-site.com/content > ~/downloads/content.html
+
+   # Option C: Export for multiple commands in same session
+   export http_proxy=http://127.0.0.1:7890
+   export https_proxy=http://127.0.0.1:7890
+   export all_proxy=socks5://127.0.0.1:7891
+   curl -s https://blocked-site.com/content > ~/downloads/content.html
+   ```
+
+3. **Then use Claude's `Read` tool** to analyze the downloaded file.
+
+### VPN Management Commands
+
+```bash
+~/memory/start-vpn.sh start    # Start VPN
+~/memory/start-vpn.sh stop     # Stop VPN
+~/memory/start-vpn.sh restart  # Restart VPN
+~/memory/start-vpn.sh status   # Check status
+```
+
+### Switching Proxy Servers (Optional)
+
+Mihomo provides multiple server locations. To switch between them:
+
+```bash
+# List available servers
+curl -s http://127.0.0.1:19090/proxies | jq '.proxies | keys'
+
+# Switch to a specific server (e.g., Singapore instead of Hong Kong)
+curl -X PUT http://127.0.0.1:19090/proxies/Proxy -d '{"name":"🇸🇬 Relay-SG1"}'
+```
