@@ -112,7 +112,7 @@ class SimpleVehicleEnv4(gym.Env):
         self.step_idx = self.config['data_start_index']
 
         # reinit vehicle simulator with random start_soc
-        self.initial_soc = self.np_random.uniform(40, 60)
+        self.initial_soc = self.np_random.uniform(20, 60)
 
         self.simulator.reset({"BcuEnyMagtSoc_Inital": self.initial_soc})
         # self.simulator = Simulator(self.config['simulator_model_path'])

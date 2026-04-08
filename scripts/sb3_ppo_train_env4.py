@@ -60,7 +60,7 @@ TRAIN_CONFIG = {
     "gae_lambda": 0.98,
     # "gae_lambda": 0.95,
     "learning_rate": 3e-4,
-    "ent_coef": 0.05,
+    "ent_coef": 0.3,
     "vf_coef": 0.25,
     # "vf_coef": 0.15,
     "device": "cpu",
@@ -182,6 +182,7 @@ def train(args: argparse.Namespace) -> None:
             tensorboard_log=f"train_results/tensorboard/{run.id}",
             info_keys=LOGGED_INFO_KEYS,
             use_sde=True,
+            target_kl=0.08,
             policy_kwargs=dict(squash_output=True),
         )
 
